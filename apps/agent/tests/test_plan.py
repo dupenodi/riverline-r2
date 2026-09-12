@@ -440,13 +440,41 @@ def test_a_fact_without_an_amount_is_reported_as_missing():
     assert any("how much rent" in g.lower() for g in s.missing())
 
 
-def test_a_fact_without_a_due_date_is_reported_as_missing():
+def test_a_missing_due_date_sharpens_the_plan_but_does_not_block_it():
+    """An earlier version blocked on this and deadlocked the conversation."""
     s = state(
         balance(1_000),
         Fact(id="salary", kind="income", label="Salary", amount=10_000, day=1),
         Fact(id="rent", kind="essential", label="Rent", amount=20_000),
     )
-    assert any("when rent" in g.lower() for g in s.missing())
+    assert s.missing() == []
+    assert any("when rent" in g.lower() for g in s.would_sharpen())
+
+
+def test_an_undated_monthly_amount_is_spread_across_the_window():
+    plan = build_plan(
+        state(
+            balance(50_000),
+            Fact(id="dining", kind="optional", label="Eating out", amount=6_000),
+        ),
+        TODAY,
+    )
+    # Spread, not charged in full every day, and the parts still sum to what
+    # the user actually said.
+    assert plan.total_out == 6_000
+    assert all(c.total_out > 0 for c in plan.timeline)
+
+
+def test_spreading_does_not_lose_rupees_to_rounding():
+    for amount in (5_000, 6_001, 999, 30_031):
+        plan = build_plan(
+            state(
+                balance(1_000_000),
+                Fact(id="x", kind="optional", label="Thing", amount=amount),
+            ),
+            TODAY,
+        )
+        assert plan.total_out == amount
 
 
 def test_a_fact_with_no_amount_cannot_silently_reach_the_timeline():
@@ -485,3 +513,20 @@ def test_a_valid_fact_with_a_minimum_due_is_accepted():
         id="card", kind="debt", label="Card", amount=20_000, minimum_due=2_000, day=10
     )
     assert fact.minimum_due == 2_000
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        # Observed from a real model: it put the frequency into the kind field.
+        {"kind": "one_time"},
+        {"kind": "expense"},
+        {"frequency": "fortnightly"},
+        {"certainty": "maybe"},
+        {"status": "pending"},
+    ],
+)
+def test_enum_values_outside_the_schema_are_rejected(kwargs):
+    base = {"id": "x", "kind": "essential", "label": "Thing", "amount": 1_000, "day": 5}
+    with pytest.raises(FactError):
+        Fact(**{**base, **kwargs})

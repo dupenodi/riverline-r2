@@ -18,6 +18,18 @@ Frequency = Literal["monthly", "weekly", "quarterly", "one_time"]
 Certainty = Literal["known", "estimated"]
 Status = Literal["due", "already_paid"]
 
+# A `Literal` annotation is not enforced at runtime, so these are checked by
+# hand. It matters: a model that answers kind="one_time" (a real observed case,
+# confusing the field with `frequency`) would otherwise be accepted silently and
+# then quietly fail to match anywhere the kind is tested — including the check
+# that decides what can be cut when money is short.
+ENUMS: dict[str, tuple[str, ...]] = {
+    "kind": ("balance", "income", "essential", "debt", "optional"),
+    "frequency": ("monthly", "weekly", "quarterly", "one_time"),
+    "certainty": ("known", "estimated"),
+    "status": ("due", "already_paid"),
+}
+
 # Sanity bounds. A number outside these is a mishearing ("five rupees rent") or
 # a units slip, not a real figure — the agent is told to re-ask rather than the
 # planner quietly producing a nonsense plan.
@@ -56,6 +68,13 @@ class Fact:
     certainty: Certainty = "known"
 
     def __post_init__(self) -> None:
+        for name, allowed in ENUMS.items():
+            value = getattr(self, name)
+            if value not in allowed:
+                raise FactError(
+                    f"{self.label}: {name}={value!r} is not one of "
+                    + ", ".join(allowed)
+                )
         for name in ("amount", "amount_min", "amount_max", "minimum_due"):
             value = getattr(self, name)
             if value is None:
@@ -215,11 +234,15 @@ class FinanceState:
         )
 
     def missing(self) -> list[str]:
-        """What still has to be asked before a plan means anything.
+        """What genuinely blocks a plan.
 
-        Drives both the agent's next question and the missing-information card,
-        from one definition — so the card can never disagree with what the agent
-        thinks it still needs.
+        Deliberately narrow. An earlier version also demanded a due date for
+        every expense, which deadlocked the conversation: a user who says "I
+        spend about five thousand eating out" has given a completely plannable
+        figure, and the agent sat there refusing to plan and asking which day
+        they eat out. Undated spending is spread across the window instead —
+        see `plan._occurrences` — and the date is asked for as a refinement,
+        not a precondition.
         """
         gaps: list[str] = []
         if not self.of_kind("balance"):
@@ -229,13 +252,24 @@ class FinanceState:
         if not self.of_kind("essential"):
             gaps.append("Your essential monthly expenses")
         for fact in self.facts.values():
-            if fact.kind == "balance":
-                continue
-            if not fact.has_amount:
+            if fact.kind != "balance" and not fact.has_amount:
                 gaps.append(f"How much {fact.label} is")
-            elif not fact.has_day and fact.frequency != "weekly":
-                gaps.append(f"When {fact.label} is due")
         return gaps
+
+    def would_sharpen(self) -> list[str]:
+        """Details that improve the plan but must never hold it up.
+
+        A due date decides whether money lands before or after a bill, which is
+        the whole game — but an approximate plan now beats an exact plan the
+        user gave up waiting for.
+        """
+        return [
+            f"When {fact.label} is due"
+            for fact in self.facts.values()
+            if fact.kind in ("debt", "essential")
+            and not fact.has_day
+            and fact.frequency not in ("weekly", "one_time")
+        ]
 
     def summary_for_llm(self) -> str:
         """Current state, injected into the context after every change.

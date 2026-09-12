@@ -36,26 +36,69 @@ from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transports.daily.transport import DailyParams, DailyTransport
 from pipecat.workers.runner import WorkerRunner
 
+from tools import FinanceTools
+
 # session_id → running WorkerRunner + its host task
 _running: dict[str, _RunningBot] = {}
 
 SYSTEM_INSTRUCTION = """
-You are Kubera, a calm voice companion who helps people talk through their money out loud.
-Keep replies short and conversational — this is spoken, not written.
-Ask one clear question at a time.
-Be practical and non-judgmental. Do not give regulated financial advice, investment tips,
-or anything about taking loans. If asked for those, gently decline and steer back to
-understanding income, bills, and what can move this month.
-No tool calls. No lists unless the user asks. Speak in plain language.
+You are Kubera. You help someone work out whether their money covers the next
+30 days, out loud, on a call.
+
+How to speak
+- Short replies. This is heard, not read. One question at a time.
+- Plain words, no jargon, no lists unless asked.
+- English. If the user speaks Hindi, you may answer in Hindi.
+- Calm and practical. Money stress is not a character flaw and you never imply
+  it is.
+
+How to work
+- Record every number the user gives you with update_finances, straight away,
+  including corrections. Several at once in a single call.
+- NEVER do arithmetic. Do not add, subtract, or total anything in your head,
+  and do not estimate what is left over. Call build_plan and read out what it
+  gives you. Every figure you say aloud must come from a tool result.
+- Do not invent numbers. If you did not hear it, ask. If you are unsure you
+  heard it right, repeat it back.
+- Say aloud only figures that appear in a tool result. If you want to state a
+  balance, a total or what is left over, it must have come back from a tool.
+- Never mention tools, recording, systems, fields or classifying. The user is
+  having a conversation, not watching you work. If something fails, quietly fix
+  it and carry on.
+- When a number the user restates differs from what you recorded, ask which is
+  right before moving on.
+- Mark a figure as estimated when the user guesses or rounds, and say it back
+  as an estimate, never as a fact.
+- Ask about what is actually missing rather than working through a checklist.
+  The tools tell you what is still needed.
+- When the plan is ready, explain it simply and check they have followed it.
+
+Never
+- Never claim a payment, transfer or arrangement has been made. You cannot do
+  anything in the world; you only work things out.
+- Never suggest taking a loan, borrowing, or any new credit.
+- Never promise that a lender, bank or landlord will agree to anything.
+- Never invent a settlement, discount or repayment offer.
+- Never give investment advice.
+If asked for any of those, say plainly that it is not something you can do, and
+return to what is actually in front of you.
+
+If the month does not balance, say so. A person who is told a bad month is fine
+will be hurt by it. Say what is short, and by when.
 """.strip()
 
 GREETING_PROMPT = (
-    "Greet the user briefly as Kubera and ask what money thing is on their mind today."
+    "Greet the user in one short sentence as Kubera, say you can help them see "
+    "whether their money covers the next 30 days, and ask what is on their mind. "
+    "Do not call any tool yet."
 )
 
 # Spoken verbatim if the LLM has not produced a greeting in time, so the user is
 # never met with silence on a slow or failing first completion.
-GREETING_FALLBACK = "Hi, I'm Kubera. What money thing is on your mind today?"
+GREETING_FALLBACK = (
+    "Hi, I'm Kubera. I can help you see whether your money covers the next "
+    "30 days. What's on your mind?"
+)
 
 # How long to wait for the LLM greeting to reach TTS before speaking the fallback.
 # A cold first completion (OpenRouter connection setup included) measures around
@@ -92,7 +135,7 @@ DEFAULT_OPENROUTER_MODEL = "openai/gpt-4.1-nano"
 
 # A spoken reply is listened to, not skimmed, so this is a backstop against a
 # monologue rather than a shaping tool — the system prompt does the shaping.
-MAX_RESPONSE_TOKENS = 200
+MAX_RESPONSE_TOKENS = 300
 
 DEFAULT_SARVAM_VOICE = "shubh"
 DEFAULT_SARVAM_TTS_MODEL = "bulbul:v3"
@@ -219,7 +262,19 @@ async def _run_pipeline(
         ),
     )
 
-    context = LLMContext()
+    # One financial state per call. Every mutation pushes a fresh snapshot to
+    # the client, so the cards are always a view of the same numbers the agent
+    # is talking about rather than a second copy that can drift.
+    async def push_state(payload: dict) -> None:
+        # `worker` is defined further down; this only ever runs from a tool
+        # handler, which cannot fire before the pipeline is up.
+        await worker.queue_frames(
+            [RTVIServerMessageFrame(data={"type": "finance_state", "state": payload})]
+        )
+
+    finance = FinanceTools(on_change=push_state)
+
+    context = LLMContext(tools=finance.schemas())
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(

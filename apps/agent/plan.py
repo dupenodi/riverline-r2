@@ -121,7 +121,12 @@ def _occurrences(fact: Fact, start: date, days: int) -> list[date]:
         return [d for d in window if (d - first).days % 7 == 0 and d >= first]
 
     if target is None:
-        return []
+        # No date given. Rather than refuse to plan — or invent a day and move
+        # the crunch point to somewhere the user never said — the amount is
+        # spread evenly across the window. That is also the honest shape of the
+        # spending this usually is: "about five thousand eating out" does not
+        # happen on one afternoon.
+        return window if fact.frequency == "monthly" else []
 
     if fact.frequency == "one_time":
         return [d for d in window if d.day == target][:1]
@@ -171,12 +176,28 @@ def _build_timeline(
             continue
         if fact.id in minimum_only and fact.minimum_due is not None:
             amount = fact.minimum_due
-        for when in _occurrences(fact, start, WINDOW_DAYS):
+
+        days = _occurrences(fact, start, WINDOW_DAYS)
+        if not days:
+            continue
+
+        # A spread fact was given as a monthly total, so it has to be divided
+        # across the window rather than charged in full every day. Integer
+        # rupees, with the remainder on day one, so the parts still sum to the
+        # figure the user actually said.
+        spread = len(days) == WINDOW_DAYS and not fact.has_day
+        per_day = amount // WINDOW_DAYS if spread else amount
+        remainder = amount - per_day * WINDOW_DAYS if spread else 0
+
+        for position, when in enumerate(days):
             cell = by_date[when]
+            value = per_day + (remainder if position == 0 else 0)
+            if value == 0:
+                continue
             if fact.is_income:
-                cell.inflows.append(_movement(fact, amount))
+                cell.inflows.append(_movement(fact, value))
             else:
-                cell.outflows.append(_movement(fact, amount))
+                cell.outflows.append(_movement(fact, value))
 
     balance = state.opening_balance
     for cell in cells:
