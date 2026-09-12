@@ -1,6 +1,43 @@
 :root {
-  --background: #f4f7f5;
-  --foreground: #12241e;
+  /* Surfaces — from Voice Finance Agent design doc */
+  --canvas: oklch(0.98 0.003 260);
+  --surface: #fff;
+
+  /* Ink */
+  --ink: oklch(0.22 0.015 260);
+  --ink-soft: oklch(0.3 0.015 260);
+  --ink-muted: oklch(0.45 0.015 260);
+  --ink-faint: oklch(0.52 0.015 260);
+  --ink-dim: oklch(0.35 0.015 260);
+  --ink-quiet: oklch(0.4 0.015 260);
+  --ink-ghost: oklch(0.55 0.015 260);
+
+  /* Accent (blue-violet) */
+  --accent: oklch(0.48 0.13 264);
+  --accent-soft: oklch(0.42 0.12 264);
+  --accent-tint: oklch(0.96 0.01 264);
+  --accent-tint-strong: oklch(0.985 0.004 264);
+  --accent-wash: oklch(0.94 0.02 264);
+  --accent-ring: oklch(0.85 0.02 264);
+  --accent-shadow: oklch(0.48 0.13 264 / 0.26);
+
+  /* Status */
+  --success: oklch(0.55 0.12 150);
+  --warn: oklch(0.72 0.13 75);
+  --danger: oklch(0.5 0.16 25);
+  --danger-tint: oklch(0.96 0.02 25);
+
+  /* Borders */
+  --border: oklch(0.93 0.005 260);
+  --border-soft: oklch(0.95 0.004 260);
+  --border-strong: oklch(0.9 0.005 260);
+  --border-chip: oklch(0.91 0.005 260);
+  --hairline: oklch(0.92 0.005 260);
+  --spinner-track: oklch(0.85 0.005 260);
+
+  /* Type */
+  --font-sans: var(--font-ibm-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
 }
 
 html,
@@ -11,9 +48,9 @@ body {
 
 body {
   margin: 0;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -22,6 +59,45 @@ body {
   box-sizing: border-box;
 }
 
-a {
-  color: inherit;
+button {
+  font: inherit;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.14);
+    opacity: 0.18;
+  }
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

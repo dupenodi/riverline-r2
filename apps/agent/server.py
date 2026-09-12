@@ -1,8 +1,9 @@
-"""FastAPI entry point for the Riverline voice agent service."""
+"""FastAPI entry point for the Kubera voice agent service."""
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response
@@ -11,7 +12,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 import bot
-import daily
+import daily_rooms as daily
 from schemas import (
     CreateSessionRequest,
     SessionCreatedResponse,
@@ -23,9 +24,19 @@ from schemas import (
 )
 from sessions import store
 
-load_dotenv()
+def _load_env() -> None:
+    """Load .env from monorepo root (local) and/or CWD (Docker env_file still wins)."""
+    here = Path(__file__).resolve().parent
+    for candidate in (here.parent.parent / ".env", here / ".env", Path.cwd() / ".env"):
+        if candidate.is_file():
+            load_dotenv(candidate)
+            break
+    load_dotenv()
 
-app = FastAPI(title="Riverline Agent", version="0.1.0")
+
+_load_env()
+
+app = FastAPI(title="Kubera Agent", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,7 +68,7 @@ async def create_session(
     """
     Start a voice session: create Daily room + tokens, start bot, return client creds.
 
-    Scaffold uses placeholder Daily credentials from daily.create_room_and_tokens.
+    Scaffold: create Daily room + tokens, start Kubera bot, return client creds.
     """
     body = body or CreateSessionRequest()
     user_id = body.client.user_id if body.client else None

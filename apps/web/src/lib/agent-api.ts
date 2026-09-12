@@ -16,10 +16,12 @@ export type SessionStatus =
 
 export type CallUiStatus =
   | "idle"
+  | "mic_blocked"
   | "starting"
   | "connecting"
   | "ready"
   | "ending"
+  | "ended"
   | "error";
 
 export interface RoomInfo {
@@ -81,6 +83,23 @@ export async function getSession(
     throw new Error(err.error?.message || `getSession failed (${res.status})`);
   }
   return data as SessionStatusPayload;
+}
+
+/**
+ * Fire-and-forget session teardown for page unload.
+ *
+ * `keepalive` lets the request outlive the document, which `sendBeacon` cannot
+ * do here because the agent expects DELETE.
+ */
+export function endSessionBeacon(sessionId: string): void {
+  try {
+    void fetch(`${AGENT_URL}/sessions/${sessionId}`, {
+      method: "DELETE",
+      keepalive: true,
+    });
+  } catch {
+    /* the page is going away regardless */
+  }
 }
 
 export async function endSession(sessionId: string): Promise<void> {

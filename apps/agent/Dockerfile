@@ -11,7 +11,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev
 
-COPY server.py bot.py schemas.py sessions.py daily.py ./
+# Copy the whole package: an explicit file list silently drops new modules
+# from the image, and the failure only shows up at runtime under compose.
+COPY . ./
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV AGENT_HOST=0.0.0.0
