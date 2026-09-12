@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant User
+  participant Web as NextWeb
+  participant Agent as AgentAPI
+  participant Daily as DailyAPI
+  participant Bot as PipecatBot
+
+  User->>Web: Click Start call
+  Web->>Agent: POST /sessions
+  Agent->>Daily: Create room
+  Agent->>Daily: Create user token
+  Agent->>Daily: Create bot token
+  Agent->>Bot: Start bot (room + bot token)
+  Agent-->>Web: session_id, url, token
+  Web->>Daily: Join room (user token via Pipecat/Daily)
+  Bot->>Daily: Join room (bot token)
+  Note over User,Bot: Voice media over Daily WebRTC
+  User->>Web: Click End call
+  Web->>Daily: Leave / disconnect transport
+  Web->>Agent: DELETE /sessions/{session_id}
+  Agent->>Bot: Cancel pipeline
+  Agent->>Daily: Delete room (best effort)
+  Agent-->>Web: 204

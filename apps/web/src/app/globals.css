@@ -1,0 +1,27 @@
+:root {
+  --background: #f4f7f5;
+  --foreground: #12241e;
+}
+
+html,
+body {
+  max-width: 100vw;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+}

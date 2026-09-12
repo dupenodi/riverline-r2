@@ -1,0 +1,30 @@
+services:
+  agent:
+    build:
+      context: ./apps/agent
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    environment:
+      AGENT_HOST: 0.0.0.0
+      AGENT_PORT: 7860
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_AGENT_URL: http://localhost:7860
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_AGENT_URL: http://localhost:7860
+    depends_on:
+      agent:
+        condition: service_healthy

@@ -1,0 +1,17 @@
+[project]
+name = "riverline-agent"
+version = "0.1.0"
+description = "Riverline voice agent (Pipecat + Daily)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "pipecat-ai[daily]>=1.10.0",
+    "python-dotenv>=1.2.3",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[tool.uv]
+package = false
