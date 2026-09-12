@@ -16,3 +16,14 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+# The agent modules sit flat in this directory rather than in a package, so
+# tests import them the same way server.py does.
+pythonpath = ["."]
+testpaths = ["tests"]
