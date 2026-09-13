@@ -325,3 +325,50 @@ async def test_every_number_the_model_might_say_is_precomputed():
         assert isinstance(result[key], int), key
     assert result["lowest_balance_day"]
     assert "do not add up" in result["instruction"].lower()
+
+
+async def test_the_snapshot_carries_a_projection_once_the_balance_is_known():
+    """The calendar must be able to appear mid-conversation, not only at the end."""
+    tools, pushes = make()
+
+    await call(
+        tools,
+        "update_finances",
+        items=[{"id": "rent", "kind": "essential", "label": "Rent", "amount": 20000, "day": 20}],
+    )
+    # An expense alone says nothing about what is in the account. Drawing a
+    # calendar here would put the month deep in the red on no evidence.
+    assert pushes.pushes[-1]["projection"] is None
+
+    await call(
+        tools,
+        "update_finances",
+        items=[{"id": "cash", "kind": "balance", "label": "Money in hand", "amount": 30000}],
+    )
+    forecast = pushes.pushes[-1]["projection"]
+    assert forecast is not None
+    assert len(forecast["timeline"]) == 30
+    # Still no plan: the user has not asked for one.
+    assert pushes.pushes[-1]["plan"] is None
+
+
+async def test_the_projection_never_shows_relief_the_agent_has_not_offered():
+    tools, pushes = make()
+    await call(
+        tools,
+        "update_finances",
+        items=[
+            {"id": "cash", "kind": "balance", "label": "Money in hand", "amount": 5000},
+            {"id": "rent", "kind": "essential", "label": "Rent", "amount": 20000, "day": 20},
+            {"id": "trip", "kind": "optional", "label": "Trip", "amount": 6000, "day": 18},
+            {"id": "salary", "kind": "income", "label": "Salary", "amount": 30000, "day": 28},
+        ],
+    )
+    forecast = pushes.pushes[-1]["projection"]
+    assert forecast["cut"] == []
+    assert forecast["actions"] == []
+
+    await call(tools, "build_plan")
+    # The plan may well cut the trip; the projection beside it still shows the
+    # month as it stands, so the two cards answer two different questions.
+    assert pushes.pushes[-1]["projection"]["cut"] == []

@@ -73,6 +73,10 @@ class Action:
     label: str
     detail: str
     amount: int = 0
+    # Lets the UI mark the matching row in the ledger. Without it the card has
+    # only a sentence to match on, and "Pay the minimum on HDFC card" is not an
+    # identifier.
+    fact_id: str = ""
 
 
 @dataclass
@@ -355,6 +359,15 @@ def build_plan(state: FinanceState, today: date) -> Plan:
     )
 
 
+def _outflow_days(cells: list[DayCell]) -> dict[str, int]:
+    """How many days of the window each outgoing fact lands on."""
+    counts: dict[str, int] = {}
+    for cell in cells:
+        for movement in cell.outflows:
+            counts[movement.fact_id] = counts.get(movement.fact_id, 0) + 1
+    return counts
+
+
 def _actions(
     state: FinanceState,
     cells: list[DayCell],
@@ -373,6 +386,7 @@ def _actions(
                 label=f"Hold off on {movement.label}",
                 detail=f"Frees ₹{movement.amount:,} before the tight point",
                 amount=movement.amount,
+                fact_id=movement.fact_id,
             )
         )
 
@@ -389,23 +403,54 @@ def _actions(
                     "Interest will build on the rest."
                 ),
                 amount=full - minimum,
+                fact_id=fact_id,
             )
         )
 
     # Everything still being paid, in the order it falls due, so the plan reads
     # as a sequence of days rather than a pile of numbers.
+    #
+    # Spending the user never dated is spread over every day of the window (see
+    # `_occurrences`), which would otherwise become thirty near-identical lines
+    # of ₹166. Those collapse into one, because "₹5,000 across the month" is
+    # what the user actually said.
+    spread: dict[str, int] = {}
+    for fact_id, count in _outflow_days(cells).items():
+        if count >= WINDOW_DAYS:
+            spread[fact_id] = 0
+
     for cell in cells:
         for movement in sorted(
             cell.outflows, key=lambda m: KIND_PRIORITY.get(m.kind, 9)
         ):
+            if movement.fact_id in spread:
+                spread[movement.fact_id] += movement.amount
+                continue
             actions.append(
                 Action(
                     kind="pay",
                     label=f"{cell.day.strftime('%-d %b')} — {movement.label}",
-                    detail=f"₹{movement.amount:,}",
+                    # No detail: the amount travels in its own field, and
+                    # repeating it here printed every figure on screen twice.
+                    detail="",
                     amount=movement.amount,
+                    fact_id=movement.fact_id,
                 )
             )
+
+    for fact_id, total in spread.items():
+        fact = state.facts.get(fact_id)
+        if fact is None or total <= 0:
+            continue
+        actions.append(
+            Action(
+                kind="pay",
+                label=f"{fact.label} — across the month",
+                detail=f"₹{total:,} in total, spread over the 30 days",
+                amount=total,
+                fact_id=fact_id,
+            )
+        )
 
     if shortfall > 0:
         actions.insert(
@@ -424,3 +469,36 @@ def _actions(
         )
 
     return actions
+
+
+def project(state: FinanceState, today: date) -> Plan:
+    """The month exactly as it stands, with nothing changed.
+
+    This is what the calendar draws *while the conversation is still going*, so
+    the user watches the shape of their month appear as they talk rather than
+    waiting for a final plan. It deliberately applies no cuts and no minimums:
+    a forecast is not advice, and showing relief the user has not agreed to
+    would make the calendar disagree with what the agent is saying.
+    """
+    cells = _build_timeline(state, today, skip=set(), minimum_only=set())
+    min_balance, crunch = _lowest(cells)
+    total_in = sum(c.total_in for c in cells)
+    total_out = sum(c.total_out for c in cells)
+    solvable = min_balance >= 0
+    shortfall = 0 if solvable else -min_balance
+    return Plan(
+        start=today,
+        timeline=cells,
+        opening_balance=state.opening_balance,
+        total_in=total_in,
+        total_out=total_out,
+        net=total_in - total_out,
+        min_balance=min_balance,
+        crunch_day=None if solvable else crunch,
+        shortfall=shortfall,
+        solvable=solvable,
+        actions=[],
+        cut=[],
+        missing=state.missing(),
+        unfunded=shortfall,
+    )

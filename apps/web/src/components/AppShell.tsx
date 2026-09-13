@@ -16,6 +16,11 @@ import {
 } from "@/lib/agent-api";
 import { LevelMeter } from "@/lib/audio-level";
 import {
+  acceptSnapshot,
+  EMPTY_SNAPSHOT,
+  type FinanceSnapshot,
+} from "@/lib/finance";
+import {
   agentProgress,
   agentText,
   agentTurnEnded,
@@ -74,6 +79,7 @@ export function AppShell() {
   const [thinking, setThinking] = useState(false);
   const [scaffoldMode, setScaffoldMode] = useState(false);
   const [transcript, setTranscript] = useState<Transcript>([]);
+  const [finance, setFinance] = useState<FinanceSnapshot>(EMPTY_SNAPSHOT);
 
   const clientRef = useRef<PipecatClient | null>(null);
   const botAudioElRef = useRef<HTMLAudioElement | null>(null);
@@ -153,6 +159,7 @@ export function AppShell() {
     setThinking(false);
     setScaffoldMode(false);
     setTranscript([]);
+    setFinance(EMPTY_SNAPSHOT);
     callStartedAt.current = null;
   }, []);
 
@@ -223,6 +230,7 @@ export function AppShell() {
     setUserTalking(false);
     setThinking(false);
     setTranscript([]);
+    setFinance(EMPTY_SNAPSHOT);
     setPhase("connecting");
     setConnectStep("mic");
 
@@ -380,6 +388,17 @@ export function AppShell() {
         },
 
         onServerMessage: (data) => {
+          const message = data as { type?: string; state?: unknown } | null;
+
+          // The whole picture arrives as one versioned snapshot after every
+          // change, and the cards are a pure function of it. Nothing here
+          // recomputes money: a second implementation of the maths in the
+          // browser could disagree with the tested one.
+          if (message?.type === "finance_state") {
+            setFinance((current) => acceptSnapshot(current, message.state));
+            return;
+          }
+
           // Kubera signs off on its own (see the idle handler in bot.py). This
           // arrives ahead of the goodbye audio — it is a system frame, so it
           // jumps the output queue — so only note it here and let the bot's
@@ -494,6 +513,7 @@ export function AppShell() {
         userSpeaking={userTalking}
         thinking={thinking}
         transcript={transcript}
+        finance={finance}
         micMeter={micMeter}
         botMeter={botMeter}
         connectionLabel={scaffoldMode ? "Scaffold" : "Connected"}
@@ -510,6 +530,7 @@ export function AppShell() {
       <EndedShell
         durationSeconds={lastDuration}
         transcript={transcript}
+        finance={finance}
         reason={phase === "error" ? "dropped" : endReason}
         onRestart={resetToIdle}
         error={error}

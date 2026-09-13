@@ -15,7 +15,7 @@ from datetime import date
 import pytest
 
 from finance import Fact, FactError, FinanceState
-from plan import WINDOW_DAYS, build_plan
+from plan import WINDOW_DAYS, build_plan, project
 
 # A 15th start, so the 30-day window straddles two months — the normal case,
 # and the one a calendar-month implementation gets wrong.
@@ -530,3 +530,87 @@ def test_enum_values_outside_the_schema_are_rejected(kwargs):
     base = {"id": "x", "kind": "essential", "label": "Thing", "amount": 1_000, "day": 5}
     with pytest.raises(FactError):
         Fact(**{**base, **kwargs})
+
+
+# --- the live projection -----------------------------------------------------
+#
+# What the calendar draws mid-conversation. It must be the month as it *is*,
+# never the month as the planner would like it to be: showing a cut the agent
+# has not yet proposed would put the screen at odds with what the user is
+# hearing, which is the one thing generative cards must never do.
+
+
+def test_projection_leaves_a_shortfall_alone():
+    s = state(
+        Fact(id="bal", kind="balance", label="In hand", amount=5_000),
+        Fact(id="rent", kind="essential", label="Rent", amount=20_000, day=20),
+        Fact(id="trip", kind="optional", label="Weekend trip", amount=6_000, day=18),
+        Fact(id="pay", kind="income", label="Salary", amount=30_000, day=28),
+    )
+    forecast = project(s, TODAY)
+
+    assert forecast.cut == []
+    assert forecast.actions == []
+    assert not forecast.solvable
+    # The trip is still in the outgoings — a forecast reports, it does not advise.
+    assert any(
+        m.fact_id == "trip" for cell in forecast.timeline for m in cell.outflows
+    )
+
+
+def test_projection_and_plan_agree_when_the_month_already_works():
+    s = state(
+        Fact(id="bal", kind="balance", label="In hand", amount=60_000),
+        Fact(id="rent", kind="essential", label="Rent", amount=20_000, day=20),
+        Fact(id="pay", kind="income", label="Salary", amount=50_000, day=28),
+    )
+    forecast, plan = project(s, TODAY), build_plan(s, TODAY)
+
+    assert forecast.solvable and plan.solvable
+    assert forecast.min_balance == plan.min_balance
+    assert [c.closing_balance for c in forecast.timeline] == [
+        c.closing_balance for c in plan.timeline
+    ]
+
+
+def test_projection_covers_the_whole_window_from_the_first_fact():
+    s = state(Fact(id="bal", kind="balance", label="In hand", amount=9_000))
+    forecast = project(s, TODAY)
+
+    assert len(forecast.timeline) == WINDOW_DAYS
+    assert forecast.timeline[0].day == TODAY
+    # Nothing is known to move yet, so the balance holds flat all month.
+    assert {c.closing_balance for c in forecast.timeline} == {9_000}
+
+
+def test_undated_spending_is_one_action_not_thirty():
+    """Spreading is a planning device; it must not leak into the advice."""
+    s = state(
+        Fact(id="bal", kind="balance", label="In hand", amount=40_000),
+        Fact(id="food", kind="essential", label="Eating out", amount=5_000),
+        Fact(id="rent", kind="essential", label="Rent", amount=18_000, day=20),
+        Fact(id="pay", kind="income", label="Salary", amount=50_000, day=28),
+    )
+    plan = build_plan(s, TODAY)
+    food = [a for a in plan.actions if a.fact_id == "food"]
+
+    assert len(food) == 1
+    assert "across the month" in food[0].label
+    assert food[0].amount == 5_000
+    # A dated bill still gets its own dated line.
+    assert len([a for a in plan.actions if a.fact_id == "rent"]) == 1
+    assert "Rent" in next(a for a in plan.actions if a.fact_id == "rent").label
+
+
+def test_every_action_names_the_fact_it_came_from():
+    s = state(
+        Fact(id="bal", kind="balance", label="In hand", amount=3_000),
+        Fact(id="rent", kind="essential", label="Rent", amount=20_000, day=18),
+        Fact(id="trip", kind="optional", label="Trip", amount=6_000, day=16),
+        Fact(id="pay", kind="income", label="Salary", amount=30_000, day=28),
+    )
+    plan = build_plan(s, TODAY)
+    for action in plan.actions:
+        if action.kind == "shortfall":
+            continue
+        assert action.fact_id, f"{action.kind} action has no fact to point at"

@@ -27,7 +27,7 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.services.llm_service import FunctionCallParams
 
 from finance import FactError, FinanceState, fact_from_item
-from plan import Plan, build_plan
+from plan import Plan, build_plan, project
 
 ITEM_PROPERTIES: dict[str, Any] = {
     "id": {
@@ -265,7 +265,20 @@ class FinanceTools:
         await params.result_callback(spoken_plan(self.plan))
 
     async def _publish(self) -> None:
-        await self._on_change(snapshot(self.state, self.plan))
+        # The projection is recomputed on every mutation so the calendar tracks
+        # the conversation live; `self.plan` only appears once the user has
+        # actually asked for a plan.
+        #
+        # Gated on a known balance, not on any fact at all. Without it the
+        # opening balance is zero, and the very first expense the user mentions
+        # would draw a calendar deep in the red — implying they have nothing,
+        # which we have not been told.
+        forecast = (
+            project(self.state, self._today())
+            if self.state.of_kind("balance")
+            else None
+        )
+        await self._on_change(snapshot(self.state, self.plan, forecast))
 
 
 def spoken_plan(plan: Plan) -> dict[str, Any]:
@@ -327,12 +340,20 @@ def spoken_plan(plan: Plan) -> dict[str, Any]:
     return result
 
 
-def snapshot(state: FinanceState, plan: Plan | None) -> dict[str, Any]:
+def snapshot(
+    state: FinanceState,
+    plan: Plan | None,
+    projection: Plan | None = None,
+) -> dict[str, Any]:
     """Everything the UI draws, as one versioned message.
 
     The client renders this and computes nothing. A second implementation of the
     maths in the browser could disagree with the tested one, and then the claim
     that the calculations are testable stops being true.
+
+    `projection` is the month as it stands and updates on every turn; `plan` is
+    the finished plan and stays null until the user asks for one. Keeping them
+    apart is what stops the screen showing cuts the agent has not proposed.
     """
     return {
         "type": "finance_state",
@@ -340,6 +361,8 @@ def snapshot(state: FinanceState, plan: Plan | None) -> dict[str, Any]:
         "facts": [asdict(f) for f in state.facts.values()],
         "conflicts": [asdict(c) for c in state.conflicts],
         "missing": state.missing(),
+        "would_sharpen": state.would_sharpen(),
+        "projection": _plan_payload(projection) if projection else None,
         "plan": _plan_payload(plan) if plan else None,
     }
 

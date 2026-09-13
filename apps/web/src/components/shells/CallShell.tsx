@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AmbientBackdrop,
   BreathingOrb,
@@ -12,7 +12,9 @@ import {
   type OrbState,
   type VoiceMood,
 } from "@/components/atoms";
+import { FinancePanel } from "@/components/cards";
 import type { LevelMeter } from "@/lib/audio-level";
+import type { FinanceSnapshot } from "@/lib/finance";
 import type { Transcript } from "@/lib/transcript";
 import { AppFrame } from "./AppFrame";
 import styles from "./shells.module.css";
@@ -24,6 +26,7 @@ type CallShellProps = {
   userSpeaking: boolean;
   thinking: boolean;
   transcript: Transcript;
+  finance: FinanceSnapshot;
   micMeter?: LevelMeter | null;
   botMeter?: LevelMeter | null;
   connectionLabel?: string;
@@ -77,6 +80,7 @@ export function CallShell({
   userSpeaking,
   thinking,
   transcript,
+  finance,
   micMeter = null,
   botMeter = null,
   connectionLabel = "Connected",
@@ -94,6 +98,23 @@ export function CallShell({
     ending,
   };
   const label = statusLabel(state);
+
+  // Two panes side by side on a wide screen; one at a time on a phone, where
+  // showing both would leave neither legible.
+  const [pane, setPane] = useState<"voice" | "cards">("voice");
+  const [unseen, setUnseen] = useState(false);
+  const seenVersion = useRef(finance.version);
+
+  useEffect(() => {
+    if (pane === "cards") {
+      seenVersion.current = finance.version;
+      setUnseen(false);
+      return;
+    }
+    // Updates land while the user is watching the conversation instead. The
+    // dot is the only hint they get that the other pane moved.
+    if (finance.version > seenVersion.current) setUnseen(true);
+  }, [finance.version, pane]);
 
   useEffect(() => {
     if (ending) return;
@@ -128,31 +149,59 @@ export function CallShell({
         </>
       }
     >
-      <div className={styles.callMain}>
-        <AmbientBackdrop mood={moodFor(state)} active={hearing} />
-        <div className={styles.callCenter}>
-          <BreathingOrb
-            state={orbStateFor(state)}
-            size="lg"
-            active={hearing}
-            meter={agentSpeaking ? botMeter : micMeter}
-          />
-          <InputWave active={hearing} meter={micMeter} />
-          <p className={styles.voiceStatus} aria-live="polite">
-            {label}
-          </p>
-          {notice ? (
-            <p className={styles.noticeBanner} role="status">
-              {notice}
+      <div className={styles.callSplit} data-pane={pane}>
+        <div className={styles.callMain}>
+          <AmbientBackdrop mood={moodFor(state)} active={hearing} />
+          <div className={styles.callCenter}>
+            <BreathingOrb
+              state={orbStateFor(state)}
+              size="lg"
+              active={hearing}
+              meter={agentSpeaking ? botMeter : micMeter}
+            />
+            <InputWave active={hearing} meter={micMeter} />
+            <p className={styles.voiceStatus} aria-live="polite">
+              {label}
             </p>
-          ) : null}
-          <TranscriptPanel transcript={transcript} />
+            {notice ? (
+              <p className={styles.noticeBanner} role="status">
+                {notice}
+              </p>
+            ) : null}
+            <TranscriptPanel transcript={transcript} />
+          </div>
+          <Dock muted={muted} onMute={onMute} onEnd={onEnd} ending={ending} />
+          <p className={styles.shortcutHint}>
+            <kbd>M</kbd> mute · <kbd>E</kbd> end
+          </p>
         </div>
-        <Dock muted={muted} onMute={onMute} onEnd={onEnd} ending={ending} />
-        <p className={styles.shortcutHint}>
-          <kbd>M</kbd> mute · <kbd>E</kbd> end
-        </p>
+
+        <aside className={styles.callCards} aria-label="Your month">
+          <FinancePanel snapshot={finance} />
+        </aside>
       </div>
+
+      {/* Only reachable below the split breakpoint; on a wide screen both
+          panes are visible at once and there is nothing to switch between. */}
+      <nav className={styles.paneTabs} aria-label="View">
+        <button
+          type="button"
+          onClick={() => setPane("voice")}
+          aria-pressed={pane === "voice"}
+          className={pane === "voice" ? styles.paneTabOn : styles.paneTab}
+        >
+          Conversation
+        </button>
+        <button
+          type="button"
+          onClick={() => setPane("cards")}
+          aria-pressed={pane === "cards"}
+          className={pane === "cards" ? styles.paneTabOn : styles.paneTab}
+        >
+          Your month
+          {unseen ? <i className={styles.paneDot} aria-label="updated" /> : null}
+        </button>
+      </nav>
     </AppFrame>
   );
 }
