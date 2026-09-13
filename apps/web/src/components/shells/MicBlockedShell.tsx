@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button, Icon } from "@/components/atoms";
 import { AppFrame } from "./AppFrame";
 import styles from "./shells.module.css";
@@ -5,11 +6,16 @@ import styles from "./shells.module.css";
 type MicBlockedShellProps = {
   onRetry: () => void;
   onBack: () => void;
+  sidebar?: ReactNode;
 };
 
-export function MicBlockedShell({ onRetry, onBack }: MicBlockedShellProps) {
+export function MicBlockedShell({
+  onRetry,
+  onBack,
+  sidebar = null,
+}: MicBlockedShellProps) {
   return (
-    <AppFrame>
+    <AppFrame sidebar={sidebar}>
       <div className={styles.body}>
         <div className={styles.micBlockedIcon} aria-hidden>
           <Icon name="microphone-slash" size={18} />

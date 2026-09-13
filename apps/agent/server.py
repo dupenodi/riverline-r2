@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,6 +15,7 @@ from loguru import logger
 
 import bot
 import daily_rooms as daily
+import store as db
 from schemas import (
     CreateSessionRequest,
     SessionCreatedResponse,
@@ -36,7 +39,19 @@ def _load_env() -> None:
 
 _load_env()
 
-app = FastAPI(title="Kubera Agent", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Open the local store for the life of the process."""
+    db.configure(os.getenv("KUBERA_DB_PATH"))
+    await db.init()
+    try:
+        yield
+    finally:
+        await db.shutdown()
+
+
+app = FastAPI(title="Kubera Agent", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,6 +111,14 @@ async def create_session(
         status=SessionStatus.starting,
     )
 
+    await db.record_session(
+        session_id=session.session_id,
+        user_id=user_id,
+        room_name=session.room_name,
+        room_url=session.room_url,
+        status=SessionStatus.starting.value,
+    )
+
     try:
         await bot.start_bot(
             session_id=session.session_id,
@@ -105,6 +128,9 @@ async def create_session(
     except Exception as exc:  # noqa: BLE001
         logger.exception("bot start failed session_id={}", session.session_id)
         store.set_status(session.session_id, SessionStatus.error)
+        await db.set_session_status(
+            session_id=session.session_id, status=SessionStatus.error.value
+        )
         await daily.delete_room(session.room_name)
         return JSONResponse(
             status_code=500,
@@ -153,6 +179,28 @@ async def get_session(session_id: str) -> SessionStatusResponse | JSONResponse:
     )
 
 
+@app.get(
+    "/sessions/{session_id}/finance",
+    responses={404: {"description": "Nothing recorded for this session"}},
+)
+async def get_finance(session_id: str) -> JSONResponse:
+    """The last snapshot this session published.
+
+    Read straight from the local store rather than from the bot, so it still
+    answers after the call has ended and after the process has restarted — the
+    numbers are the point of the call and they outlive the room.
+    """
+    payload = await db.latest_snapshot(session_id)
+    if payload is None:
+        return JSONResponse(
+            status_code=404,
+            content=error_payload(
+                "no_finance_state", f"No financial state recorded for {session_id}"
+            ),
+        )
+    return JSONResponse(status_code=200, content=payload)
+
+
 @app.delete(
     "/sessions/{session_id}",
     responses={
@@ -176,6 +224,9 @@ async def end_session(session_id: str) -> Response:
     await bot.cancel_bot(session_id=session_id)
     await daily.delete_room(session.room_name)
     store.set_status(session_id, SessionStatus.ended)
+    await db.set_session_status(
+        session_id=session_id, status=SessionStatus.ended.value
+    )
     logger.info("DELETE /sessions/{} ended", session_id)
     return Response(status_code=204)
 

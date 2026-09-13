@@ -80,10 +80,27 @@ export type Plan = {
   timeline: DayCell[];
 };
 
+/**
+ * What one group of facts adds up to, as the agent computed it.
+ *
+ * Sent rather than summed here: the total uses the same `planning_amount` the
+ * planner uses, so the rail can never show a friendlier figure than the plan
+ * is working with. `estimated` is true if any member of the group was a guess
+ * or a range.
+ */
+export type GroupTotal = {
+  amount: number | null;
+  estimated: boolean;
+  count: number;
+};
+
 export type FinanceSnapshot = {
   type: "finance_state";
   version: number;
+  /** The user's first name, once they have given it. */
+  name: string | null;
   facts: Fact[];
+  totals: Record<FactKind, GroupTotal>;
   conflicts: Conflict[];
   missing: string[];
   would_sharpen: string[];
@@ -93,10 +110,23 @@ export type FinanceSnapshot = {
   plan: Plan | null;
 };
 
+const EMPTY_TOTAL: GroupTotal = { amount: null, estimated: false, count: 0 };
+
 export const EMPTY_SNAPSHOT: FinanceSnapshot = {
   type: "finance_state",
-  version: 0,
+  // Below the agent's first version, which is 0 — the opening publish, sent
+  // before a single number has been said. At 0 the acceptance check below
+  // would drop it and the panel would sit blank until the first fact landed.
+  version: -1,
+  name: null,
   facts: [],
+  totals: {
+    balance: EMPTY_TOTAL,
+    income: EMPTY_TOTAL,
+    essential: EMPTY_TOTAL,
+    debt: EMPTY_TOTAL,
+    optional: EMPTY_TOTAL,
+  },
   conflicts: [],
   missing: [],
   would_sharpen: [],
@@ -130,7 +160,9 @@ export function acceptSnapshot(
   return {
     ...EMPTY_SNAPSHOT,
     ...incoming,
+    name: incoming.name ?? null,
     facts: incoming.facts ?? [],
+    totals: { ...EMPTY_SNAPSHOT.totals, ...(incoming.totals ?? {}) },
     conflicts: incoming.conflicts ?? [],
     missing: incoming.missing ?? [],
     would_sharpen: incoming.would_sharpen ?? [],
@@ -144,6 +176,14 @@ export function currentPlan(snapshot: FinanceSnapshot): Plan | null {
 
 export function factsOfKind(snapshot: FinanceSnapshot, kind: FactKind): Fact[] {
   return snapshot.facts.filter((fact) => fact.kind === kind);
+}
+
+/** What a group adds up to. Never recomputed here — see `GroupTotal`. */
+export function groupTotal(
+  snapshot: FinanceSnapshot,
+  kind: FactKind,
+): GroupTotal {
+  return snapshot.totals?.[kind] ?? EMPTY_TOTAL;
 }
 
 export function hasAnything(snapshot: FinanceSnapshot): boolean {

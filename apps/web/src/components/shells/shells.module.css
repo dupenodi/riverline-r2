@@ -1,7 +1,13 @@
+/* --- frame --------------------------------------------------------------- */
+
 .frame {
   position: relative;
   display: flex;
   flex-direction: column;
+  /* A definite height, not just a minimum: the split below must not grow to
+     its content, or the rail's rows push the dock off the bottom of a frame
+     that clips its own overflow. Each column scrolls inside itself instead. */
+  height: 100dvh;
   min-height: 100dvh;
   background: var(--canvas);
   color: var(--ink);
@@ -10,32 +16,328 @@
 }
 
 .frameTransparent {
-  background: transparent;
+  background: var(--canvas);
 }
 
 .topBar {
   position: relative;
   z-index: 2;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px;
+  gap: 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 
 .topBarTransparent {
-  border-bottom-color: transparent;
-  background: transparent;
+  border-bottom-color: var(--border);
+  background: var(--surface);
 }
 
 .topMeta {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
   font-size: 11.5px;
   color: var(--ink-faint);
 }
+
+/* --- call layout: conversation left, ledger right ------------------------ */
+
+.callSplit {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rail-w);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.callMain {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.callCards {
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.planScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+}
+
+/* --- live captions (both speakers) ---------------------------------------- */
+
+.captions,
+.captionsCompact {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Pre-plan: the conversation owns the column. */
+.captions {
+  flex: 1;
+}
+
+/* With a plan on screen: a short strip under the calendar, not a second stage. */
+.captionsCompact {
+  flex: none;
+  height: min(28vh, 220px);
+  border-top: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.captionsScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Top fade only — newest lines stay sharp at the bottom edge. */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 56px,
+    #000 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 56px,
+    #000 100%
+  );
+}
+
+.captionsScroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Bottom-align so the first few lines sit where the eye already is, and
+   older ones push up into the fade as the call grows. */
+.captionsStack {
+  box-sizing: border-box;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 48px 40px 28px;
+  max-width: 36rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.captionsCompact .captionsStack {
+  gap: 12px;
+  padding: 36px 24px 16px;
+}
+
+.captionLine {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.captionLine[data-role="user"] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.captionWho {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+}
+
+.captionLine[data-live="true"] .captionWho {
+  color: var(--accent);
+}
+
+/* Kubera's voice is the serif. Yours is Karla — same language as the chrome. */
+.captionText {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(17px, 2.2vw, 22px);
+  font-weight: 400;
+  line-height: 1.38;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.captionLine[data-role="user"] .captionText {
+  font-family: var(--font-sans);
+  font-size: clamp(14px, 1.7vw, 16px);
+  line-height: 1.45;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+  max-width: 28ch;
+}
+
+.captionsCompact .captionText {
+  font-size: clamp(14px, 1.8vw, 17px);
+}
+
+.captionsCompact .captionLine[data-role="user"] .captionText {
+  font-size: 13.5px;
+}
+
+/* Produced but not yet voiced / still being recognised — same size, quieter. */
+.captionGhost {
+  color: var(--ink-ghost);
+}
+
+.captionIdle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-ghost);
+  text-align: center;
+}
+
+/* --- dock ---------------------------------------------------------------- */
+
+.dock {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.ctl,
+.ctlEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.ctl:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.ctlEnd {
+  border-color: transparent;
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.ctlEnd:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.ctl:disabled,
+.ctlEnd:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ctl kbd,
+.ctlEnd kbd {
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: 0.45;
+}
+
+.ctl:focus-visible,
+.ctlEnd:focus-visible,
+.paneTab:focus-visible,
+.paneTabOn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- connection pip ------------------------------------------------------- */
+
+.wire {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wire i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-ghost);
+  flex: none;
+}
+
+.wire[data-live="true"] i {
+  background: var(--in);
+  animation: pip 2.4s ease-in-out infinite;
+}
+
+.wire[data-muted="true"] i {
+  background: var(--danger);
+  animation: none;
+}
+
+@keyframes pip {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.notice {
+  flex: none;
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--hairline);
+  background: var(--accent-tint);
+  color: var(--accent-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* --- simple centred screens ---------------------------------------------- */
 
 .body {
   position: relative;
@@ -45,51 +347,57 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
-  padding: 32px 24px;
+  gap: 18px;
+  padding: 28px 24px;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  text-align: center;
 }
 
 .title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  text-align: center;
-  text-wrap: pretty;
+  font-family: var(--font-serif);
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 400;
+  letter-spacing: -0.016em;
+  line-height: 1.22;
+  text-wrap: balance;
 }
 
 .subtitle {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.6;
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
   color: var(--ink-muted);
-  text-align: center;
-  max-width: 420px;
+  max-width: 46ch;
   text-wrap: pretty;
 }
 
 .hint {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--ink-faint);
-  text-align: center;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 9px;
   justify-content: center;
 }
 
 .steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   font-size: 12.5px;
   color: var(--ink-muted);
-  min-width: 240px;
+  min-width: 220px;
+  text-align: left;
 }
 
 .step {
@@ -99,131 +407,64 @@
 }
 
 .stepDone {
-  color: var(--ink);
+  color: var(--ink-soft);
 }
 
 .stepPending {
-  color: var(--ink-faint);
+  color: var(--ink-ghost);
 }
 
 .check {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--success);
+  background: var(--in);
   flex: none;
 }
 
-.micBlockedIcon {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--danger-tint);
-  color: var(--danger);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.callMain {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.callCenter {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 24px 16px 8px;
-  text-align: center;
-}
-
-.voiceStatus {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--ink-dim);
-}
-
-.errorBanner {
-  margin: 0;
-  max-width: 420px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--danger-tint);
-  color: var(--danger);
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: center;
-}
-
-.noticeBanner {
-  margin: 0;
-  max-width: 26rem;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: oklch(0.18 0.02 260 / 0.72);
-  color: oklch(0.95 0.02 95);
-  font-size: 12.5px;
-  line-height: 1.4;
-  text-align: center;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.shortcutHint {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  padding: 0 16px 16px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--ink-faint);
-}
-
-.shortcutHint kbd {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--border-chip);
-  background: var(--surface);
-}
-
 .checkIdle {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--spinner-track);
   flex: none;
 }
 
-.steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.micBlockedIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--danger-tint);
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+.errorBanner {
+  margin: 10px 0 0;
+  max-width: 42ch;
+  padding: 9px 13px;
+  border-radius: 6px;
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* --- ended: transcript recap --------------------------------------------- */
+
 .recap {
-  width: min(34rem, 100%);
-  max-height: 16rem;
+  width: min(36rem, 100%);
+  max-height: 15rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 12px;
+  gap: 9px;
+  padding: 13px 15px;
   border: 1px solid var(--border);
+  border-radius: 8px;
   background: var(--surface);
   text-align: left;
 }
@@ -231,57 +472,69 @@
 .recapLine {
   margin: 0;
   display: grid;
-  grid-template-columns: 3.4rem 1fr;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
   gap: 10px;
   align-items: baseline;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--ink-soft);
   text-wrap: pretty;
 }
 
 .recapSpeaker {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-ghost);
 }
 
-@media (max-width: 30rem) {
-  .recapLine {
-    grid-template-columns: 1fr;
-    gap: 2px;
+/* --- ended, with a plan to keep ------------------------------------------ */
+
+.endedPlan {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+}
+
+.endedBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px 28px 0;
+}
+
+.endedTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: -0.014em;
+}
+
+.endedMeta {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 44rem) {
+  .endedBar {
+    padding: 14px 16px 0;
   }
 }
 
-/* --- call layout: voice and cards side by side --------------------------- */
-
-.callSplit {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(21rem, 27rem);
-  min-height: 0;
-}
-
-.callCards {
-  position: relative;
-  z-index: 2;
-  min-height: 0;
-  border-left: 1px solid var(--border);
-  background: color-mix(in oklch, var(--surface) 70%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
+/* --- phone: one pane at a time ------------------------------------------- */
 
 .paneTabs {
   display: none;
 }
 
-@media (max-width: 62rem) {
-  /* One pane at a time: at this width both together leave neither readable. */
+@media (max-width: 44rem) {
   .callSplit {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -293,15 +546,15 @@
 
   .callCards {
     border-left: none;
-    background: var(--surface);
   }
 
   .paneTabs {
     position: relative;
     z-index: 3;
+    flex: none;
     display: flex;
     gap: 4px;
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border);
     background: var(--surface);
   }
@@ -313,35 +566,39 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 9px 10px;
+    padding: 8px 10px;
     border: none;
-    border-radius: 9px;
+    border-radius: 7px;
     background: transparent;
     color: var(--ink-faint);
-    font-size: 12.5px;
-    font-weight: 500;
+    font: inherit;
+    font-size: 12px;
     cursor: pointer;
   }
 
   .paneTabOn {
     background: var(--accent-tint);
     color: var(--accent-soft);
+    font-weight: 600;
   }
 
   .paneDot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: var(--accent);
   }
-}
 
-.planReview {
-  width: min(34rem, 100%);
-  max-height: 60vh;
-  overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--canvas);
-  text-align: left;
+  .captionsStack {
+    padding: 40px 20px 24px;
+  }
+
+  .captionsCompact .captionsStack {
+    padding: 32px 16px 14px;
+  }
+
+  .recapLine {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
 }

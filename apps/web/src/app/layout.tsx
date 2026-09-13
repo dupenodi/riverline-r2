@@ -1,27 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Karla, Newsreader } from "next/font/google";
 import "./globals.css";
 
-const ibmPlexSans = IBM_Plex_Sans({
+// Karla carries the interface; Newsreader carries anything Kubera says. The
+// split is the point: a question read in a text serif sounds like a person
+// asking, and the same sentence in the UI face sounds like a form label.
+const karla = Karla({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-ibm-plex-sans",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-karla",
   display: "swap",
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
+const newsreader = Newsreader({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-ibm-plex-mono",
+  weight: ["300", "400", "500"],
+  style: ["normal", "italic"],
+  variable: "--font-newsreader",
   display: "swap",
 });
 
 const TITLE = "Kubera";
 const DESCRIPTION =
-  "I help you talk through your money and see what the month can hold.";
+  "Talk through your money and see whether the next thirty days hold.";
 
 export const viewport: Viewport = {
-  themeColor: "#F7F7F9",
+  themeColor: "#F4F7F4",
   colorScheme: "light",
   width: "device-width",
   initialScale: 1,
@@ -72,7 +76,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}
+      className={`${karla.variable} ${newsreader.variable}`}
     >
       <body>{children}</body>
     </html>

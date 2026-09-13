@@ -2,6 +2,7 @@
   "early": {
     "type": "finance_state",
     "version": 3,
+    "name": null,
     "facts": [
       {
         "id": "cash",
@@ -49,6 +50,33 @@
         "certainty": "known"
       }
     ],
+    "totals": {
+      "balance": {
+        "amount": 12400,
+        "estimated": false,
+        "count": 1
+      },
+      "income": {
+        "amount": null,
+        "estimated": false,
+        "count": 0
+      },
+      "essential": {
+        "amount": 24000,
+        "estimated": false,
+        "count": 1
+      },
+      "debt": {
+        "amount": 12000,
+        "estimated": false,
+        "count": 1
+      },
+      "optional": {
+        "amount": null,
+        "estimated": false,
+        "count": 0
+      }
+    },
     "conflicts": [],
     "missing": [
       "What money is coming in, and when"
@@ -330,6 +358,7 @@
   "tight": {
     "type": "finance_state",
     "version": 13,
+    "name": null,
     "facts": [
       {
         "id": "cash",
@@ -512,6 +541,33 @@
         "certainty": "known"
       }
     ],
+    "totals": {
+      "balance": {
+        "amount": 35000,
+        "estimated": false,
+        "count": 1
+      },
+      "income": {
+        "amount": 73000,
+        "estimated": true,
+        "count": 2
+      },
+      "essential": {
+        "amount": 33600,
+        "estimated": true,
+        "count": 4
+      },
+      "debt": {
+        "amount": 30000,
+        "estimated": false,
+        "count": 2
+      },
+      "optional": {
+        "amount": 15800,
+        "estimated": false,
+        "count": 3
+      }
+    },
     "conflicts": [
       {
         "fact_id": "rent",
@@ -1814,6 +1870,7 @@
   "unsolvable": {
     "type": "finance_state",
     "version": 5,
+    "name": null,
     "facts": [
       {
         "id": "cash",
@@ -1891,6 +1948,33 @@
         "certainty": "known"
       }
     ],
+    "totals": {
+      "balance": {
+        "amount": 1200,
+        "estimated": false,
+        "count": 1
+      },
+      "income": {
+        "amount": 28000,
+        "estimated": false,
+        "count": 1
+      },
+      "essential": {
+        "amount": 32000,
+        "estimated": false,
+        "count": 2
+      },
+      "debt": {
+        "amount": 9500,
+        "estimated": false,
+        "count": 1
+      },
+      "optional": {
+        "amount": null,
+        "estimated": false,
+        "count": 0
+      }
+    },
     "conflicts": [],
     "missing": [],
     "would_sharpen": [

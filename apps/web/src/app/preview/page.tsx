@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { FinancePanel } from "@/components/cards";
+import { LedgerRail } from "@/components/ledger/LedgerRail";
+import { PlanView } from "@/components/plan/PlanView";
 import { CallShell } from "@/components/shells/CallShell";
+import { EndedShell } from "@/components/shells/EndedShell";
 import fixtures from "@/lib/fixtures/snapshots.json";
 import type { FinanceSnapshot } from "@/lib/finance";
 import styles from "./preview.module.css";
@@ -40,8 +42,31 @@ const CASES: { key: keyof typeof fixtures; label: string; blurb: string }[] = [
 export default function PreviewPage() {
   const [active, setActive] = useState<keyof typeof fixtures>("tight");
   const [inCall, setInCall] = useState(false);
+  const [ended, setEnded] = useState(false);
   const snapshot = fixtures[active] as unknown as FinanceSnapshot;
   const blurb = CASES.find((entry) => entry.key === active)?.blurb;
+
+  if (ended) {
+    return (
+      <>
+        <EndedShell
+          durationSeconds={244}
+          transcript={[]}
+          finance={snapshot}
+          reason="user"
+          onRestart={() => setEnded(false)}
+          sidebar={<LedgerRail snapshot={snapshot} />}
+        />
+        <button
+          type="button"
+          onClick={() => setEnded(false)}
+          className={styles.escape}
+        >
+          Back to cards
+        </button>
+      </>
+    );
+  }
 
   if (inCall) {
     return (
@@ -54,6 +79,7 @@ export default function PreviewPage() {
           thinking={false}
           transcript={[]}
           finance={snapshot}
+          sidebar={<LedgerRail snapshot={snapshot} />}
           connectionLabel="Preview"
           onMute={() => {}}
           onEnd={() => setInCall(false)}
@@ -93,11 +119,23 @@ export default function PreviewPage() {
         >
           See it in the call layout
         </button>
+        <button
+          type="button"
+          onClick={() => setEnded(true)}
+          className={styles.tab}
+        >
+          See the hung-up screen
+        </button>
       </header>
 
       <div className={styles.stage}>
-        <FinancePanel snapshot={snapshot} />
+        <LedgerRail snapshot={snapshot} />
       </div>
+      {snapshot.plan ? (
+        <div className={styles.planStage}>
+          <PlanView snapshot={snapshot} />
+        </div>
+      ) : null}
     </main>
   );
 }

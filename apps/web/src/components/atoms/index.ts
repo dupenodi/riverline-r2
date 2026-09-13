@@ -1,11 +1,6 @@
-export { AmbientBackdrop, type VoiceMood } from "./AmbientBackdrop";
 export { BrandMark } from "./BrandMark";
 export { BreathingOrb, type OrbState } from "./BreathingOrb";
 export { Button, type ButtonVariant } from "./Button";
 export { CallTimer } from "./CallTimer";
-export { Dock } from "./Dock";
-export { HearingStrip } from "./HearingStrip";
 export { Icon, type IconName } from "./Icon";
-export { InputWave } from "./InputWave";
 export { StatusDot, type StatusTone } from "./StatusDot";
-export { TranscriptPanel } from "./TranscriptPanel";

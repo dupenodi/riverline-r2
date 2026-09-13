@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PipecatClient } from "@pipecat-ai/client-js";
 import { DailyTransport } from "@pipecat-ai/daily-transport";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
+import { LedgerRail } from "@/components/ledger/LedgerRail";
 import { CallShell } from "@/components/shells/CallShell";
 import { ConnectingShell } from "@/components/shells/ConnectingShell";
 import { EndedShell } from "@/components/shells/EndedShell";
@@ -21,8 +22,7 @@ import {
   type FinanceSnapshot,
 } from "@/lib/finance";
 import {
-  agentProgress,
-  agentText,
+  agentSegment,
   agentTurnEnded,
   agentTurnStarted,
   interrupted,
@@ -87,10 +87,8 @@ export function AppShell() {
   const callStartedAt = useRef<number | null>(null);
   const cancelledRef = useRef(false);
   const agentSpeakingRef = useRef(false);
-  const endedByAgent = useRef(false);
 
   const micMeter = useMemo(() => new LevelMeter(), []);
-  const botMeter = useMemo(() => new LevelMeter(), []);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -133,7 +131,6 @@ export function AppShell() {
   const teardownClient = useCallback(async () => {
     detachBotAudio();
     micMeter.reset();
-    botMeter.reset();
     const client = clientRef.current;
     clientRef.current = null;
     if (!client) return;
@@ -142,7 +139,7 @@ export function AppShell() {
     } catch {
       /* already gone */
     }
-  }, [botMeter, detachBotAudio, micMeter]);
+  }, [detachBotAudio, micMeter]);
 
   const resetToIdle = useCallback(() => {
     cancelledRef.current = false;
@@ -222,7 +219,6 @@ export function AppShell() {
 
   const startCall = useCallback(async () => {
     cancelledRef.current = false;
-    endedByAgent.current = false;
     setError(null);
     setNotice(null);
     setMuted(false);
@@ -317,10 +313,6 @@ export function AppShell() {
         // Loudness, sampled by the Daily transport at 10 Hz. Kept out of React
         // state so the visuals animate without re-rendering the call screen.
         onLocalAudioLevel: (level) => micMeter.set(level),
-        onRemoteAudioLevel: (level, participant) => {
-          if (participant?.local) return;
-          botMeter.set(level);
-        },
 
         onBotStartedSpeaking: () => {
           setAgentSpeaking(true);
@@ -328,7 +320,6 @@ export function AppShell() {
         },
         onBotStoppedSpeaking: () => {
           setAgentSpeaking(false);
-          botMeter.reset();
           setTranscript((prev) => agentTurnEnded(prev));
         },
         onBotLlmStarted: () => {
@@ -358,32 +349,39 @@ export function AppShell() {
         },
 
         onBotOutput: (data) => {
-          // Each sentence arrives twice: once as text ("new"), then again as
-          // speech progress. Only the first carries something to show.
+          // The RTVI contract, applied as written (see lib/transcript.ts):
+          //   "new" / never-spoken  → create the segment
+          //   in-progress/completed → advance spoken only (id may differ)
+          const id =
+            data.segment_id === undefined || data.segment_id === null
+              ? data.text
+              : String(data.segment_id);
+          const text = data.text ?? "";
           const status = data.spoken_status;
           const willBeSpoken = data.will_be_spoken ?? data.spoken ?? true;
-          const isProgress = status === "in-progress" || status === "completed";
-          const segmentId =
-            data.segment_id === undefined ? undefined : String(data.segment_id);
 
-          if (isProgress) {
+          // Text that never reaches TTS is on screen the moment it arrives;
+          // there will be no progress message to mark it said.
+          if (!willBeSpoken || status === undefined || status === null) {
             setTranscript((prev) =>
-              agentProgress(prev, {
-                segmentId,
-                accumulated:
-                  data.spoken_progress?.accumulated_text ?? data.text ?? "",
-              }),
+              agentSegment(prev, { id, text, spoken: text, create: true }),
             );
             return;
           }
 
-          if (!data.text) return;
+          if (status === "new") {
+            setTranscript((prev) =>
+              agentSegment(prev, { id, text, spoken: "", create: true }),
+            );
+            return;
+          }
+
+          const accumulated = data.spoken_progress?.accumulated_text;
+          const spoken =
+            status === "completed" ? text : (accumulated ?? "");
+
           setTranscript((prev) =>
-            agentText(
-              prev,
-              { id: segmentId ?? data.text, text: data.text },
-              { willBeSpoken },
-            ),
+            agentSegment(prev, { id, text, spoken, create: false }),
           );
         },
 
@@ -396,19 +394,6 @@ export function AppShell() {
           // browser could disagree with the tested one.
           if (message?.type === "finance_state") {
             setFinance((current) => acceptSnapshot(current, message.state));
-            return;
-          }
-
-          // Kubera signs off on its own (see the idle handler in bot.py). This
-          // arrives ahead of the goodbye audio — it is a system frame, so it
-          // jumps the output queue — so only note it here and let the bot's
-          // actual departure end the call, once the goodbye has played.
-          if (
-            data &&
-            typeof data === "object" &&
-            (data as { type?: string }).type === "session_end"
-          ) {
-            endedByAgent.current = true;
           }
         },
         onError: (message) => {
@@ -424,12 +409,6 @@ export function AppShell() {
           }
         },
         onBotDisconnected: () => {
-          // Kubera leaving after its own sign-off is expected; only an
-          // unannounced exit is a dropped call.
-          if (endedByAgent.current) {
-            void closeCall("agent");
-            return;
-          }
           setError("Kubera dropped off the call.");
           void closeCall("dropped");
         },
@@ -467,7 +446,7 @@ export function AppShell() {
       );
       setPhase("error");
     }
-  }, [botMeter, closeCall, detachBotAudio, goLive, micMeter, teardownClient]);
+  }, [closeCall, detachBotAudio, goLive, micMeter, teardownClient]);
 
   const handleEnd = useCallback(() => {
     if (phase === "ending" || phase === "ended") return;
@@ -490,17 +469,33 @@ export function AppShell() {
     });
   }, [micMeter]);
 
+  // One panel, rendered by whichever screen is up. It is deliberately not
+  // owned by the call screen: the column is there before the call starts, so
+  // the user has seen where their numbers are going to appear, and it is still
+  // there afterwards with the plan in it.
+  const sidebar = <LedgerRail snapshot={finance} />;
+
   if (phase === "idle") {
-    return <WelcomeScreen onStart={startCall} />;
+    return <WelcomeScreen onStart={startCall} sidebar={sidebar} />;
   }
 
   if (phase === "mic_blocked") {
-    return <MicBlockedShell onRetry={startCall} onBack={resetToIdle} />;
+    return (
+      <MicBlockedShell
+        onRetry={startCall}
+        onBack={resetToIdle}
+        sidebar={sidebar}
+      />
+    );
   }
 
   if (phase === "connecting") {
     return (
-      <ConnectingShell step={connectStep} onCancel={handleCancelConnect} />
+      <ConnectingShell
+        step={connectStep}
+        onCancel={handleCancelConnect}
+        sidebar={sidebar}
+      />
     );
   }
 
@@ -514,8 +509,8 @@ export function AppShell() {
         thinking={thinking}
         transcript={transcript}
         finance={finance}
+        sidebar={sidebar}
         micMeter={micMeter}
-        botMeter={botMeter}
         connectionLabel={scaffoldMode ? "Scaffold" : "Connected"}
         notice={notice}
         onMute={handleMute}
@@ -534,6 +529,8 @@ export function AppShell() {
         reason={phase === "error" ? "dropped" : endReason}
         onRestart={resetToIdle}
         error={error}
+        sidebar={sidebar}
+        sidebarVersion={finance.version}
       />
     );
   }

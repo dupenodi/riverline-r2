@@ -121,6 +121,15 @@ UPDATE_FINANCES_PROPERTIES: dict[str, Any] = {
         "description": "Ids to forget, when the user retracts something.",
         "items": {"type": "string"},
     },
+    "user_name": {
+        "type": "string",
+        "description": (
+            "The user's first name, once they have given it. Send it on the "
+            "first call after they say it and never again. Carried here rather "
+            "than in a tool of its own so introducing yourself costs no extra "
+            "round trip."
+        ),
+    },
 }
 
 BUILD_PLAN_DESCRIPTION = (
@@ -129,6 +138,25 @@ BUILD_PLAN_DESCRIPTION = (
     "returns the real numbers — read them out rather than estimating. If "
     "information is still missing it will say so; ask for that first."
 )
+
+
+CHECK_DAY_DESCRIPTION = (
+    "Answer a question about one specific date — 'what will I have on the "
+    "29th', 'can I afford something on the 5th', 'how much is left by the "
+    "20th'. Returns the balance at the end of that day and what moves on it. "
+    "Call this whenever the user asks about a particular day. Never try to "
+    "work a date out yourself from the plan totals."
+)
+
+CHECK_DAY_PROPERTIES: dict[str, Any] = {
+    "day": {
+        "type": "integer",
+        "description": (
+            "Day of the month the user asked about, 1-31. The next occurrence "
+            "of that day inside the 30-day window is the one that answers."
+        ),
+    },
+}
 
 
 class FinanceTools:
@@ -147,8 +175,18 @@ class FinanceTools:
     ) -> None:
         self.state = FinanceState()
         self.plan: Plan | None = None
+        self.user_name: str | None = None
         self._on_change = on_change
         self._today = today
+
+    async def publish(self) -> None:
+        """Push the current state to the client.
+
+        Called once when the call opens so the panel is live and honest from the
+        first second — showing an empty month and what is still needed — rather
+        than staying blank until the first number happens to be mentioned.
+        """
+        await self._publish()
 
     def schemas(self) -> list[FunctionSchema]:
         """Tool schemas with handlers bound, for `LLMContext(tools=...)`."""
@@ -167,14 +205,127 @@ class FinanceTools:
                 required=[],
                 handler=self._handle_build_plan,
             ),
+            # A third tool, against the two-tool rule at the top of this file,
+            # and worth the exception. Observed without it: asked "what will be
+            # my balance on 29th?", the model answered "I don't have a specific
+            # figure for the 29th — that would need to come from the plan tool"
+            # — no answer, and the tooling leaked into the call. The day-by-day
+            # numbers already exist in the timeline; nothing could reach them.
+            FunctionSchema(
+                name="check_day",
+                description=CHECK_DAY_DESCRIPTION,
+                properties=CHECK_DAY_PROPERTIES,
+                required=["day"],
+                handler=self._handle_check_day,
+            ),
         ]
+
+    def _timeline(self) -> Plan | None:
+        """The best day-by-day picture available right now.
+
+        The finished plan if there is one, otherwise the live projection, so a
+        date question can be answered mid-conversation rather than only after
+        the user has asked for a plan.
+        """
+        if self.plan is not None:
+            return self.plan
+        if not self.state.of_kind("balance"):
+            return None
+        return project(self.state, self._today())
+
+    async def _handle_check_day(self, params: FunctionCallParams) -> None:
+        raw = params.arguments.get("day")
+        try:
+            day = int(raw)
+        except (TypeError, ValueError):
+            day = 0
+
+        if not 1 <= day <= 31:
+            await params.result_callback(
+                {
+                    "ready": False,
+                    "instruction": (
+                        "That is not a day of the month. Ask which date they "
+                        "mean."
+                    ),
+                }
+            )
+            return
+
+        plan = self._timeline()
+        if plan is None:
+            await params.result_callback(
+                {
+                    "ready": False,
+                    "still_missing": self.state.missing(),
+                    "instruction": (
+                        "You cannot answer a date question until you know what "
+                        "they have on hand. Ask for that first, naturally, "
+                        "without mentioning why."
+                    ),
+                }
+            )
+            return
+
+        cell = next((c for c in plan.timeline if c.day.day == day), None)
+        if cell is None:
+            last = plan.timeline[-1].day if plan.timeline else self._today()
+            await params.result_callback(
+                {
+                    "ready": False,
+                    "window_ends": last.strftime("%-d %B"),
+                    "instruction": (
+                        "That date falls outside the 30 days this covers. Say "
+                        "plainly how far ahead you can see, and offer the "
+                        "nearest date you do have."
+                    ),
+                }
+            )
+            return
+
+        lowest = min(plan.timeline, key=lambda c: c.closing_balance)
+        result: dict[str, Any] = {
+            "ready": True,
+            "date": cell.day.strftime("%-d %B"),
+            "balance_at_the_end_of_that_day": cell.closing_balance,
+            "money_in_that_day": cell.total_in,
+            "money_out_that_day": cell.total_out,
+            "what_moves_that_day": [
+                {"what": m.label, "amount": m.amount, "direction": "in" if m in cell.inflows else "out"}
+                for m in cell.inflows + cell.outflows
+            ],
+            "is_the_tightest_day": cell.day == lowest.day,
+            "say_no_number_that_is_not_in_this_result": True,
+        }
+        result["instruction"] = (
+            "Read out balance_at_the_end_of_that_day and name what moves that "
+            "day. Do not add or subtract anything yourself — every figure you "
+            "say must be one of the values above."
+        )
+        logger.info(
+            "check_day day={} date={} balance={}",
+            day,
+            cell.day.isoformat(),
+            cell.closing_balance,
+        )
+        await params.result_callback(result)
 
     async def _handle_update(self, params: FunctionCallParams) -> None:
         items = params.arguments.get("items") or []
         removals = params.arguments.get("remove") or []
+        name = params.arguments.get("user_name")
 
         recorded: list[str] = []
         problems: list[str] = []
+
+        if isinstance(name, str) and name.strip():
+            # Only the first word: models tend to send back the whole utterance
+            # ("Priya, and I work in Pune"), and the panel wants a name, not a
+            # sentence.
+            cleaned = name.strip().split()[0][:40]
+            if cleaned != self.user_name:
+                self.user_name = cleaned
+                self.state.touch()
 
         for item in items:
             if not isinstance(item, dict):
@@ -278,7 +429,9 @@ class FinanceTools:
             if self.state.of_kind("balance")
             else None
         )
-        await self._on_change(snapshot(self.state, self.plan, forecast))
+        await self._on_change(
+            snapshot(self.state, self.plan, forecast, name=self.user_name)
+        )
 
 
 def spoken_plan(plan: Plan) -> dict[str, Any]:
@@ -344,6 +497,8 @@ def snapshot(
     state: FinanceState,
     plan: Plan | None,
     projection: Plan | None = None,
+    *,
+    name: str | None = None,
 ) -> dict[str, Any]:
     """Everything the UI draws, as one versioned message.
 
@@ -358,7 +513,9 @@ def snapshot(
     return {
         "type": "finance_state",
         "version": state.version,
+        "name": name,
         "facts": [asdict(f) for f in state.facts.values()],
+        "totals": state.kind_totals(),
         "conflicts": [asdict(c) for c in state.conflicts],
         "missing": state.missing(),
         "would_sharpen": state.would_sharpen(),

@@ -10,13 +10,13 @@ Monorepo for a conversational voice agent:
 ## Prerequisites
 
 - Docker + Docker Compose, **or** Node 20+, Python 3.11+, [uv](https://docs.astral.sh/uv/)
-- API keys: Daily, Sarvam, OpenRouter
+- API keys: Daily, Sarvam
 
 ## Quick start (Docker)
 
 ```bash
 cp .env.example .env
-# fill DAILY_API_KEY, SARVAM_API_KEY, OPENROUTER_API_KEY
+# fill DAILY_API_KEY, SARVAM_API_KEY
 docker compose up --build
 ```
 
@@ -46,7 +46,7 @@ NEXT_PUBLIC_AGENT_URL=http://localhost:7860 npm run dev
 
 1. Browser → `POST /sessions` (agent creates Daily room + starts bot)
 2. Browser joins room with returned URL + token (Pipecat Daily transport)
-3. Bot greets and converses (Sarvam STT → OpenRouter LLM → Sarvam TTS)
+3. Bot greets and converses (Sarvam STT → Sarvam LLM → Sarvam TTS)
 4. Browser → `DELETE /sessions/{id}` to hang up
 
 Diagram: [docs/user-flow.png](docs/user-flow.png).

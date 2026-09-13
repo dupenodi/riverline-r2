@@ -1,0 +1,350 @@
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 28px 28px;
+  min-width: 0;
+}
+
+/* --- verdict ------------------------------------------------------------- */
+
+.verdict {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.verdictText {
+  min-width: 0;
+}
+
+/* The one sentence that answers the question they called about. Set in the
+   serif, because it is Kubera talking rather than the interface labelling. */
+.head {
+  margin: 0 0 7px;
+  font-family: var(--font-serif);
+  font-size: clamp(21px, 2.4vw, 27px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.014em;
+  max-width: 22ch;
+  text-wrap: balance;
+}
+
+.sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 50ch;
+  text-wrap: pretty;
+}
+
+.figures {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+  flex: none;
+}
+
+.figures div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.figures dt {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+.figures dd {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.figIn {
+  color: var(--in);
+}
+
+.figLow {
+  color: var(--danger);
+}
+
+/* --- calendar ------------------------------------------------------------ */
+
+.cal {
+  border-top: 1px solid var(--border);
+}
+
+.calScroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.calScroll > .cal {
+  min-width: 24rem;
+}
+
+.calHead,
+.calBody {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.weekday {
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pad {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cell {
+  min-height: 62px;
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cellNum {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-ghost);
+}
+
+.cellMonth {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.cellMove {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cellLabel {
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--ink-dim);
+  overflow-wrap: anywhere;
+}
+
+.cellAmount {
+  font-size: 10.5px;
+  color: var(--ink-dim);
+}
+
+.cellMore {
+  font-size: 9.5px;
+  color: var(--ink-ghost);
+}
+
+.cellFlag {
+  margin-top: auto;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+  white-space: nowrap;
+}
+
+/* Tones. Silence is the default; ink is spent only where money moves. */
+.tone_quiet {
+  background: transparent;
+}
+
+.tone_out {
+  background: var(--surface-sunk);
+}
+
+.tone_out .cellNum,
+.tone_out .cellAmount {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.tone_in {
+  background: var(--in-tint);
+}
+
+.tone_in .cellNum,
+.tone_in .cellLabel,
+.tone_in .cellAmount {
+  color: var(--in);
+}
+
+.tone_in .cellAmount {
+  font-weight: 600;
+}
+
+.tone_today {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tone_today .cellNum {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tone_today .cellFlag {
+  color: var(--accent);
+}
+
+/* The single day worth pointing at. The only clay in the interface. */
+.tone_low {
+  background: var(--danger-tint);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.tone_low .cellNum,
+.tone_low .cellLabel,
+.tone_low .cellAmount,
+.tone_low .cellFlag {
+  color: var(--danger);
+}
+
+.spread {
+  margin: 0;
+  padding: 9px 8px 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  text-wrap: pretty;
+}
+
+.spread b {
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* --- what to change ------------------------------------------------------ */
+
+.changes {
+  display: flex;
+  flex-direction: column;
+}
+
+.changesHead {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.change {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.change:last-child {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mark {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--danger-ring);
+  color: var(--danger);
+}
+
+.markMin {
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
+
+.markGap {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.changeText {
+  font-size: 13px;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.changeText em {
+  display: block;
+  font-style: normal;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  margin-top: 2px;
+  text-wrap: pretty;
+}
+
+.gap {
+  margin: 0;
+  border-left: 2px solid var(--danger);
+  background: var(--danger-tint);
+  padding: 11px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+.gap b {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+@media (max-width: 44rem) {
+  .plan {
+    padding: 18px 16px 22px;
+  }
+
+  .figures {
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .cell {
+    min-height: 52px;
+    padding: 5px 5px 6px;
+  }
+
+  .cellLabel,
+  .cellAmount {
+    font-size: 9.5px;
+  }
+
+  .change {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+}

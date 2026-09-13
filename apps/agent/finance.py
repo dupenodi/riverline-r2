@@ -192,6 +192,15 @@ class FinanceState:
         self.facts[fact.id] = fact
         self.version += 1
 
+    def touch(self) -> None:
+        """Record a change that is not a fact, so the snapshot version moves.
+
+        The client accepts a snapshot only if it is newer than the one on
+        screen, so anything that changes what is drawn — the user's name, for
+        instance — has to move the version or the update is silently dropped.
+        """
+        self.version += 1
+
     def remove(self, fact_id: str) -> bool:
         """Drop a fact the user retracted."""
         if self.facts.pop(fact_id, None) is None:
@@ -270,6 +279,33 @@ class FinanceState:
             and not fact.has_day
             and fact.frequency not in ("weekly", "one_time")
         ]
+
+    def kind_totals(self) -> dict[str, dict]:
+        """What each group on screen adds up to.
+
+        Computed here rather than in the browser for the same reason the plan
+        is: a second implementation of the arithmetic could disagree with the
+        tested one. It uses `planning_amount`, so the figure the rail shows is
+        the figure the planner will actually use — income at the low end of a
+        range, outgoings at the high end — and never a friendlier number than
+        the plan is working with.
+        """
+        totals: dict[str, dict] = {}
+        for kind in ("balance", "income", "essential", "debt", "optional"):
+            facts = self.of_kind(kind)
+            if not facts:
+                totals[kind] = {"amount": None, "estimated": False, "count": 0}
+                continue
+            totals[kind] = {
+                "amount": sum(f.planning_amount() or 0 for f in facts),
+                # A group is only as certain as its least certain member: one
+                # guess in it means the total is a guess.
+                "estimated": any(
+                    f.certainty == "estimated" or f.amount is None for f in facts
+                ),
+                "count": len(facts),
+            }
+        return totals
 
     def summary_for_llm(self) -> str:
         """Current state, injected into the context after every change.

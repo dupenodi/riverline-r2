@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  AmbientBackdrop,
-  BreathingOrb,
-  CallTimer,
-  Dock,
-  InputWave,
-  StatusDot,
-  TranscriptPanel,
-  type OrbState,
-  type VoiceMood,
-} from "@/components/atoms";
-import { FinancePanel } from "@/components/cards";
+import { useEffect, type ReactNode } from "react";
+import { CallTimer } from "@/components/atoms";
+import { PlanView } from "@/components/plan/PlanView";
 import type { LevelMeter } from "@/lib/audio-level";
 import type { FinanceSnapshot } from "@/lib/finance";
-import type { Transcript } from "@/lib/transcript";
+import { isEmpty, type Transcript } from "@/lib/transcript";
 import { AppFrame } from "./AppFrame";
+import { CaptionStream } from "./CaptionStream";
 import styles from "./shells.module.css";
+
+/**
+ * The call.
+ *
+ * While there is no plan, the centre is live captions — Kubera and the user,
+ * stacked like subtitles, newest at the bottom. Once a plan exists it takes
+ * the room and the captions shrink to a strip under it.
+ *
+ * Mute and end stay in the dock. Status that used to live in a hearing strip
+ * (Listening / Thinking / speaking) sits in the caption idle line instead.
+ */
 
 type CallShellProps = {
   elapsedSeconds: number;
@@ -27,8 +29,10 @@ type CallShellProps = {
   thinking: boolean;
   transcript: Transcript;
   finance: FinanceSnapshot;
+  /** The ledger rail, owned by AppShell so it outlives the call. */
+  sidebar?: ReactNode;
+  /** Kept for the call API; loudness bars left with the old hearing strip. */
   micMeter?: LevelMeter | null;
-  botMeter?: LevelMeter | null;
   connectionLabel?: string;
   notice?: string | null;
   onMute: () => void;
@@ -36,41 +40,19 @@ type CallShellProps = {
   ending?: boolean;
 };
 
-type VoiceState = {
-  muted: boolean;
-  agentSpeaking: boolean;
-  userSpeaking: boolean;
-  thinking: boolean;
-  ending: boolean;
-};
-
-function moodFor({ ending, muted, agentSpeaking }: VoiceState): VoiceMood {
-  if (ending) return "ending";
-  if (muted) return "muted";
-  if (agentSpeaking) return "speaking";
-  return "listening";
-}
-
-function statusLabel(state: VoiceState): string {
-  if (state.ending) return "Ending";
-  if (state.muted) return "Muted";
-  if (state.agentSpeaking) return "Speaking";
-  if (state.thinking) return "Thinking";
-  if (state.userSpeaking) return "Hearing you";
+function status(
+  muted: boolean,
+  agentSpeaking: boolean,
+  thinking: boolean,
+  ending: boolean,
+  hasLines: boolean,
+): string {
+  if (ending) return "Ending";
+  if (muted) return "Muted";
+  if (agentSpeaking) return "Kubera is speaking";
+  if (thinking) return "Thinking";
+  if (!hasLines) return "One moment — getting the line ready.";
   return "Listening";
-}
-
-function orbStateFor({
-  ending,
-  muted,
-  agentSpeaking,
-  thinking,
-}: VoiceState): OrbState {
-  if (ending) return "thinking";
-  if (muted) return "muted";
-  if (agentSpeaking) return "speaking";
-  if (thinking) return "thinking";
-  return "listening";
 }
 
 export function CallShell({
@@ -81,40 +63,17 @@ export function CallShell({
   thinking,
   transcript,
   finance,
-  micMeter = null,
-  botMeter = null,
+  sidebar = null,
+  micMeter: _micMeter = null,
   connectionLabel = "Connected",
   notice = null,
   onMute,
   onEnd,
   ending = false,
 }: CallShellProps) {
-  const hearing = userSpeaking && !muted && !ending;
-  const state: VoiceState = {
-    muted,
-    agentSpeaking,
-    userSpeaking: hearing,
-    thinking: thinking && !agentSpeaking,
-    ending,
-  };
-  const label = statusLabel(state);
-
-  // Two panes side by side on a wide screen; one at a time on a phone, where
-  // showing both would leave neither legible.
-  const [pane, setPane] = useState<"voice" | "cards">("voice");
-  const [unseen, setUnseen] = useState(false);
-  const seenVersion = useRef(finance.version);
-
-  useEffect(() => {
-    if (pane === "cards") {
-      seenVersion.current = finance.version;
-      setUnseen(false);
-      return;
-    }
-    // Updates land while the user is watching the conversation instead. The
-    // dot is the only hint they get that the other pane moved.
-    if (finance.version > seenVersion.current) setUnseen(true);
-  }, [finance.version, pane]);
+  const planned = finance.plan != null;
+  const hasLines = transcript.some((turn) => !isEmpty(turn));
+  const idle = status(muted, agentSpeaking, thinking, ending, hasLines);
 
   useEffect(() => {
     if (ending) return;
@@ -138,70 +97,64 @@ export function CallShell({
 
   return (
     <AppFrame
-      transparent
+      // Once the plan is up it wants the full width; the rail has said
+      // everything it has to say and the calendar repeats it in context.
+      sidebar={planned ? null : sidebar}
       meta={
         <>
-          <StatusDot
-            tone={muted ? "muted" : agentSpeaking ? "warn" : "success"}
-            label={connectionLabel}
-          />
+          <span
+            className={styles.wire}
+            data-live={!muted && !ending}
+            data-muted={muted}
+          >
+            <i aria-hidden />
+            {muted ? "Muted" : connectionLabel}
+          </span>
           <CallTimer seconds={elapsedSeconds} />
         </>
       }
     >
-      <div className={styles.callSplit} data-pane={pane}>
-        <div className={styles.callMain}>
-          <AmbientBackdrop mood={moodFor(state)} active={hearing} />
-          <div className={styles.callCenter}>
-            <BreathingOrb
-              state={orbStateFor(state)}
-              size="lg"
-              active={hearing}
-              meter={agentSpeaking ? botMeter : micMeter}
-            />
-            <InputWave active={hearing} meter={micMeter} />
-            <p className={styles.voiceStatus} aria-live="polite">
-              {label}
-            </p>
-            {notice ? (
-              <p className={styles.noticeBanner} role="status">
-                {notice}
-              </p>
-            ) : null}
-            <TranscriptPanel transcript={transcript} />
-          </div>
-          <Dock muted={muted} onMute={onMute} onEnd={onEnd} ending={ending} />
-          <p className={styles.shortcutHint}>
-            <kbd>M</kbd> mute · <kbd>E</kbd> end
-          </p>
+      {planned ? (
+        <div className={styles.planScroll}>
+          <PlanView snapshot={finance} />
         </div>
+      ) : null}
 
-        <aside className={styles.callCards} aria-label="Your month">
-          <FinancePanel snapshot={finance} />
-        </aside>
+      <CaptionStream
+        transcript={transcript}
+        compact={planned}
+        idle={idle}
+        agentSpeaking={agentSpeaking}
+        userSpeaking={userSpeaking && !muted && !ending}
+      />
+
+      {notice ? (
+        <p className={styles.notice} role="status">
+          {notice}
+        </p>
+      ) : null}
+
+      <div className={styles.dock}>
+        <button
+          type="button"
+          className={styles.ctl}
+          onClick={onMute}
+          aria-pressed={muted}
+          disabled={ending}
+        >
+          {muted ? "Unmute" : "Mute"}
+          <kbd>M</kbd>
+        </button>
+        <button
+          type="button"
+          className={styles.ctlEnd}
+          onClick={onEnd}
+          disabled={ending}
+        >
+          {ending ? "Ending…" : "End call"}
+          <kbd>E</kbd>
+        </button>
       </div>
-
-      {/* Only reachable below the split breakpoint; on a wide screen both
-          panes are visible at once and there is nothing to switch between. */}
-      <nav className={styles.paneTabs} aria-label="View">
-        <button
-          type="button"
-          onClick={() => setPane("voice")}
-          aria-pressed={pane === "voice"}
-          className={pane === "voice" ? styles.paneTabOn : styles.paneTab}
-        >
-          Conversation
-        </button>
-        <button
-          type="button"
-          onClick={() => setPane("cards")}
-          aria-pressed={pane === "cards"}
-          className={pane === "cards" ? styles.paneTabOn : styles.paneTab}
-        >
-          Your month
-          {unseen ? <i className={styles.paneDot} aria-label="updated" /> : null}
-        </button>
-      </nav>
     </AppFrame>
   );
 }

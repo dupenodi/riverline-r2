@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { BreathingOrb, Button, Icon, StatusDot } from "@/components/atoms";
 import { AppFrame } from "./AppFrame";
 import styles from "./shells.module.css";
@@ -7,6 +8,7 @@ type Step = "mic" | "session" | "room" | "assistant";
 type ConnectingShellProps = {
   step: Step;
   onCancel?: () => void;
+  sidebar?: ReactNode;
 };
 
 const STEPS: { key: Step; label: string }[] = [
@@ -16,11 +18,15 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "assistant", label: "Waking Kubera" },
 ];
 
-export function ConnectingShell({ step, onCancel }: ConnectingShellProps) {
+export function ConnectingShell({
+  step,
+  onCancel,
+  sidebar = null,
+}: ConnectingShellProps) {
   const current = STEPS.findIndex((s) => s.key === step);
 
   return (
-    <AppFrame meta={<StatusDot tone="warn" label="Joining" />}>
+    <AppFrame sidebar={sidebar} meta={<StatusDot tone="warn" label="Joining" />}>
       <div className={styles.body}>
         <BreathingOrb state="connecting" />
         <div>

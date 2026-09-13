@@ -73,3 +73,11 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+.planStage {
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}

@@ -29,3 +29,9 @@ out/
 
 # Logs
 *.log
+
+# Local store (SQLite)
+apps/agent/data/
+*.db
+*.db-wal
+*.db-shm

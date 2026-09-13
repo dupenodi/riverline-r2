@@ -9,6 +9,11 @@ services:
     environment:
       AGENT_HOST: 0.0.0.0
       AGENT_PORT: 7860
+      # The local store lives on a named volume, so the numbers from a call
+      # survive a rebuild rather than going away with the container.
+      KUBERA_DB_PATH: /data/kubera.db
+    volumes:
+      - agent-data:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/health')"]
       interval: 10s
@@ -28,3 +33,6 @@ services:
     depends_on:
       agent:
         condition: service_healthy
+
+volumes:
+  agent-data:

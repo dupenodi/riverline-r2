@@ -1,6 +1,8 @@
 # Kubera agent (Pipecat + Daily)
 
-Conversational voice bot: **Sarvam realtime STT → OpenRouter LLM → Sarvam TTS** ([Pipecat example](https://github.com/pipecat-ai/pipecat/blob/main/examples/voice/voice-sarvam-realtime.py)).
+Conversational voice bot: **Sarvam realtime STT → Sarvam LLM → Sarvam TTS**
+([realtime STT example](https://github.com/pipecat-ai/pipecat/blob/main/examples/voice/voice-sarvam-realtime.py),
+[function-calling example](https://github.com/pipecat-ai/pipecat/blob/main/examples/function-calling/function-calling-sarvam.py)).
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -14,8 +16,7 @@ Conversational voice bot: **Sarvam realtime STT → OpenRouter LLM → Sarvam TT
 At the repo root, copy `.env.example` → `.env` and fill:
 
 - `DAILY_API_KEY`
-- `SARVAM_API_KEY` (STT + TTS)
-- `OPENROUTER_API_KEY` (any OpenRouter model via `OPENROUTER_MODEL`)
+- `SARVAM_API_KEY` (STT + LLM + TTS)
 
 ```bash
 uv sync

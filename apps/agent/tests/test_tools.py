@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from finance import FinanceState, fact_from_item
 from tools import FinanceTools, snapshot
 
 TODAY = date(2026, 9, 15)
@@ -48,6 +49,7 @@ async def call(tools: FinanceTools, name: str, **kwargs: Any) -> Any:
     handler = {
         "update_finances": tools._handle_update,
         "build_plan": tools._handle_build_plan,
+        "check_day": tools._handle_check_day,
     }[name]
     await handler(params)
     return params.result
@@ -372,3 +374,153 @@ async def test_the_projection_never_shows_relief_the_agent_has_not_offered():
     # The plan may well cut the trip; the projection beside it still shows the
     # month as it stands, so the two cards answer two different questions.
     assert pushes.pushes[-1]["projection"]["cut"] == []
+
+
+# --- group subtotals shown in the rail ---------------------------------------
+
+
+def _state(*items: dict) -> FinanceState:
+    state = FinanceState()
+    for item in items:
+        state.upsert(fact_from_item(item))
+    return state
+
+
+async def test_totals_are_empty_before_anything_is_said() -> None:
+    totals = FinanceState().kind_totals()
+
+    assert totals["income"] == {"amount": None, "estimated": False, "count": 0}
+
+
+async def test_totals_add_up_a_group() -> None:
+    state = _state(
+        {"id": "rent", "kind": "essential", "label": "Rent", "amount": 24000},
+        {"id": "power", "kind": "essential", "label": "Electricity", "amount": 2400},
+    )
+
+    assert state.kind_totals()["essential"]["amount"] == 26400
+    assert state.kind_totals()["essential"]["count"] == 2
+
+
+async def test_a_group_holding_one_guess_is_a_guess() -> None:
+    state = _state(
+        {"id": "rent", "kind": "essential", "label": "Rent", "amount": 24000},
+        {
+            "id": "food",
+            "kind": "essential",
+            "label": "Eating out",
+            "amount": 5000,
+            "certainty": "estimated",
+        },
+    )
+
+    assert state.kind_totals()["essential"]["estimated"] is True
+
+
+async def test_a_range_totals_the_way_the_plan_will_read_it() -> None:
+    """Outgoings take the high end, income the low. The rail must not show a
+    friendlier number than the planner is working with."""
+    state = _state(
+        {
+            "id": "food",
+            "kind": "essential",
+            "label": "Groceries",
+            "amount_min": 4000,
+            "amount_max": 6000,
+        },
+        {
+            "id": "gig",
+            "kind": "income",
+            "label": "Freelance",
+            "amount_min": 10000,
+            "amount_max": 20000,
+        },
+    )
+    totals = state.kind_totals()
+
+    assert totals["essential"]["amount"] == 6000
+    assert totals["income"]["amount"] == 10000
+    assert totals["essential"]["estimated"] is True
+
+
+async def test_totals_ride_along_in_the_snapshot() -> None:
+    state = _state(
+        {"id": "bal", "kind": "balance", "label": "In hand", "amount": 35000}
+    )
+
+    assert snapshot(state, None)["totals"]["balance"]["amount"] == 35000
+
+
+# --- check_day: answering a question about one date --------------------------
+#
+# Added after a real call: asked "what will be my balance on 29th?", the agent
+# said it had no day-by-day figure and named the tool it was missing. The
+# numbers existed in the timeline the whole time; nothing could reach them.
+
+
+def funded() -> FinanceTools:
+    """A state with enough in it to project a timeline."""
+    tools, _ = make()
+    for item in (
+        {"id": "bal", "kind": "balance", "label": "In hand", "amount": 30000},
+        {"id": "pay", "kind": "income", "label": "Salary", "amount": 50000, "day": 1},
+        {"id": "rent", "kind": "essential", "label": "Rent", "amount": 20000, "day": 20},
+    ):
+        tools.state.upsert(fact_from_item(item))
+    return tools
+
+
+async def test_a_date_question_is_answered_from_the_timeline():
+    result = await call(funded(), "check_day", day=20)
+
+    assert result["ready"] is True
+    assert result["date"] == "20 September"
+    assert result["money_out_that_day"] == 20000
+    assert any(m["what"] == "Rent" for m in result["what_moves_that_day"])
+
+
+async def test_a_quiet_day_still_answers():
+    """Most days have nothing on them; the balance is still the answer."""
+    result = await call(funded(), "check_day", day=17)
+
+    assert result["ready"] is True
+    assert result["what_moves_that_day"] == []
+    assert isinstance(result["balance_at_the_end_of_that_day"], int)
+
+
+async def test_a_date_question_works_before_a_plan_is_built():
+    """The user asked on turn six, long before anyone said "build me a plan"."""
+    tools = funded()
+    assert tools.plan is None
+
+    assert (await call(tools, "check_day", day=20))["ready"] is True
+
+
+async def test_a_date_beyond_the_window_says_so():
+    """15 Sep to 14 Oct covers every day-of-month from 1 to 30 somewhere in it.
+    Only a 31st falls outside, September having none and 31 Oct being past the
+    end — so that is the one case where "I cannot see that far" is the answer."""
+    result = await call(funded(), "check_day", day=31)
+
+    assert result["ready"] is False
+    assert "window_ends" in result
+
+
+async def test_a_date_question_before_any_balance_asks_for_one():
+    """No opening balance means no timeline, and no honest answer."""
+    tools, _ = make()
+
+    result = await call(tools, "check_day", day=20)
+
+    assert result["ready"] is False
+    assert result["still_missing"]
+
+
+async def test_a_nonsense_day_is_rejected():
+    assert (await call(funded(), "check_day", day=47))["ready"] is False
+    assert (await call(funded(), "check_day", day="tuesday"))["ready"] is False
+
+
+async def test_the_tightest_day_is_flagged():
+    """So the agent can say "that is your worst day" without working it out."""
+    assert (await call(funded(), "check_day", day=20))["is_the_tightest_day"] is True
