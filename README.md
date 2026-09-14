@@ -2,6 +2,10 @@
 
 ![Kubera architecture](architecture.png)
 
+[Demo recording](https://drive.google.com/file/d/1hvWbCgqZoSXjSTk37-MCn91YXdnxaQNq/view?usp=sharing)
+·
+[One-pager](https://docs.google.com/document/d/1RXFmFgv0olzXsnvwDnNhBHCnOqA2F9_IGkIzNyhJaxI/edit?usp=sharing)
+
 Voice agent that maps the next 30 days of someone’s money.
 
 The model extracts facts. A deterministic engine (`apps/agent/cashflow.py`)
@@ -117,4 +121,4 @@ computes those numbers.
 - No loans, credit lines, or investing suggestions (not in the planner vocabulary).
 - Hindi-only speech is untested (`language_code` is locked to `en-IN`; Hinglish works).
 - `/sessions` is unauthenticated (local demo).
-- Demo video. Decision journal is `DECISION_JOURNAL.md`.
+- Decision journal is `DECISION_JOURNAL.md`.
