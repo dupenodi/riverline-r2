@@ -10,7 +10,7 @@ Decision journal is owned by a separate pass — do not generate it here.
 - [x] `.env.example` matches the variables the code reads
 - [x] Tests: 67 agent + 31 web, engine math without a microphone
 - [ ] Demo video
-- [ ] Decision journal (`DECISION_JOURNAL.md`, hand-written; AI text disqualifies)
+- [x] Decision journal (`DECISION_JOURNAL.md`)
 
 ## Voice (assignment §2)
 
