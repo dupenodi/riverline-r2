@@ -151,6 +151,35 @@ export interface SessionHistory {
   session: SessionListItem;
   transcript: TranscriptTurn[];
   transactions: MoneyItem[];
+  derived?: {
+    finish: number;
+    crunch: { date: string; amount: number };
+    days: Array<{
+      date: string;
+      in: number;
+      out: number;
+      closing: number;
+      moves: Array<{
+        id: string;
+        label: string;
+        amount: number;
+        kind: string;
+      }>;
+    }>;
+  } | null;
+  cash?: number | null;
+  entries?: Array<Record<string, unknown>>;
+  missing?: string[];
+  plan?: {
+    solvable: boolean;
+    steps: Array<{ action: string; label: string; amount: number }>;
+    gap: number | null;
+    gap_date: string | null;
+  } | null;
+  advice?: {
+    points: string[];
+    payoff: { lowest: number; date: string; ok: boolean; finish: number };
+  } | null;
 }
 
 export async function listSessions(

@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { Button } from "@/components/atoms";
-import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
+import { MoneyBoard } from "@/components/transactions/MoneyBoard";
 import {
   EMPTY_TRANSACTIONS,
+  hasBoard,
   type TransactionsState,
 } from "@/lib/transactions";
 import { turnText, type Transcript } from "@/lib/transcript";
@@ -44,7 +45,7 @@ export function EndedShell({
 }: EndedShellProps) {
   const lines = transcript.filter((turn) => turnText(turn) !== "");
   const dropped = Boolean(error) || reason === "dropped";
-  const hasMoney = transactions.items.length > 0;
+  const hasMoney = hasBoard(transactions);
   const hasTurns = lines.length > 0;
 
   if (hasMoney) {
@@ -74,7 +75,7 @@ export function EndedShell({
           ) : null}
 
           <div className={styles.planScroll}>
-            <MoneyCalendar state={transactions} />
+            <MoneyBoard state={transactions} />
           </div>
 
           <div className={styles.recapCompact}>

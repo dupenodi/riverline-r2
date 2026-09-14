@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +33,7 @@ from schemas import (
     error_payload,
 )
 from sessions import store
+from tools import calendar_items, entries_from_rows, finance_from_rows
 
 
 def _load_env() -> None:
@@ -92,23 +93,36 @@ def _list_item(row: dict[str, Any]) -> SessionListItem:
     )
 
 
-def _money_items(rows: list[dict[str, Any]]) -> list[MoneyItem]:
-    out: list[MoneyItem] = []
-    for row in rows:
-        direction = row.get("direction")
-        if direction not in ("incoming", "outgoing"):
-            continue
-        out.append(
-            MoneyItem(
-                id=row["id"],
-                direction=direction,
-                label=row["label"],
-                amount=int(row["amount"]),
-                day=row.get("day"),
-                created_at=row.get("created_at"),
-            )
+def _session_day(created_at: str | None) -> date:
+    parsed = _parse_dt(created_at)
+    if parsed is None:
+        return date.today()
+    return parsed.date()
+
+
+def _history_calendar(
+    meta: dict[str, Any], txs: list[dict[str, Any]]
+) -> tuple[list[MoneyItem], dict[str, Any]]:
+    """Same rolling calendar and rail as the live RTVI snapshot."""
+    cash = meta.get("cash")
+    cash_i = int(cash) if cash is not None else None
+    entries = entries_from_rows(txs)
+    items = [
+        MoneyItem(
+            id=item["id"],
+            direction=item["direction"],
+            label=item["label"],
+            amount=int(item["amount"]),
+            day=item["day"],
         )
-    return out
+        for item in calendar_items(entries)
+    ]
+    view = finance_from_rows(
+        today=_session_day(meta.get("created_at")),
+        cash=cash_i,
+        rows=txs,
+    )
+    return items, view
 
 
 def _turns(rows: list[dict[str, Any]]) -> list[TranscriptTurn]:
@@ -308,10 +322,17 @@ async def get_history(session_id: str) -> SessionHistoryResponse | JSONResponse:
     meta = history["session"]
     txs = history["transactions"]
     item = _list_item({**meta, "tx_count": len(txs)})
+    money, view = _history_calendar(meta, txs)
     return SessionHistoryResponse(
         session=item,
         transcript=_turns(history["transcript"]),
-        transactions=_money_items(txs),
+        transactions=money,
+        derived=view.get("derived"),
+        cash=view.get("cash"),
+        entries=view.get("entries") or [],
+        missing=view.get("missing") or [],
+        plan=view.get("plan"),
+        advice=meta.get("advice") or view.get("advice"),
     )
 
 

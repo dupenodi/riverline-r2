@@ -7,6 +7,7 @@ persistence never adds latency to a live conversation.
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -26,16 +27,27 @@ CREATE TABLE IF NOT EXISTS sessions (
     ended_at    TEXT,
     duration_seconds INTEGER,
     ended_reason TEXT,
-    name        TEXT
+    name        TEXT,
+    cash        INTEGER,
+    advice      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
     id          TEXT PRIMARY KEY,
     session_id  TEXT NOT NULL,
     direction   TEXT NOT NULL,
+    kind        TEXT,
     label       TEXT NOT NULL,
     amount      INTEGER NOT NULL,
+    amount_min  INTEGER,
+    amount_max  INTEGER,
     day         INTEGER,
+    day_min     INTEGER,
+    day_max     INTEGER,
+    cadence     TEXT,
+    status      TEXT,
+    min_due     INTEGER,
+    on_date     TEXT,
     created_at  TEXT NOT NULL
 );
 
@@ -64,10 +76,21 @@ _SESSION_COLUMNS = {
     "duration_seconds": "INTEGER",
     "ended_reason": "TEXT",
     "name": "TEXT",
+    "cash": "INTEGER",
+    "advice": "TEXT",
 }
 
 _TRANSACTION_COLUMNS = {
     "day": "INTEGER",
+    "kind": "TEXT",
+    "amount_min": "INTEGER",
+    "amount_max": "INTEGER",
+    "day_min": "INTEGER",
+    "day_max": "INTEGER",
+    "cadence": "TEXT",
+    "status": "TEXT",
+    "min_due": "INTEGER",
+    "on_date": "TEXT",
 }
 
 
@@ -185,6 +208,18 @@ class Store:
             (name, session_id),
         )
 
+    def set_session_cash(self, *, session_id: str, cash: int) -> None:
+        self._execute(
+            "UPDATE sessions SET cash = ? WHERE session_id = ?",
+            (cash, session_id),
+        )
+
+    def set_session_advice(self, *, session_id: str, advice: dict[str, Any]) -> None:
+        self._execute(
+            "UPDATE sessions SET advice = ? WHERE session_id = ?",
+            (json.dumps(advice), session_id),
+        )
+
     def end_session(
         self,
         *,
@@ -228,7 +263,18 @@ class Store:
             "SELECT * FROM sessions WHERE session_id = ?",
             (session_id,),
         )
-        return dict(rows[0]) if rows else None
+        if not rows:
+            return None
+        item = dict(rows[0])
+        raw = item.get("advice")
+        if isinstance(raw, str) and raw.strip():
+            try:
+                item["advice"] = json.loads(raw)
+            except json.JSONDecodeError:
+                item["advice"] = None
+        else:
+            item["advice"] = None
+        return item
 
     def list_sessions(
         self,
@@ -267,24 +313,49 @@ class Store:
     # --- transactions -------------------------------------------------------
 
     def add_transaction(self, *, session_id: str, item: dict[str, Any]) -> None:
+        kind = item.get("kind")
+        direction = item.get("direction")
+        if kind not in ("income", "need", "debt", "flex", "owed"):
+            kind = "income" if direction == "incoming" else "need"
+        direction = "incoming" if kind in ("income", "owed") else "outgoing"
         self._execute(
             """
             INSERT INTO transactions
-                (id, session_id, direction, label, amount, day, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, session_id, direction, kind, label, amount, amount_min,
+                 amount_max, day, day_min, day_max, cadence, status, min_due,
+                 on_date, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 direction = excluded.direction,
+                kind = excluded.kind,
                 label = excluded.label,
                 amount = excluded.amount,
-                day = excluded.day
+                amount_min = excluded.amount_min,
+                amount_max = excluded.amount_max,
+                day = excluded.day,
+                day_min = excluded.day_min,
+                day_max = excluded.day_max,
+                cadence = excluded.cadence,
+                status = excluded.status,
+                min_due = excluded.min_due,
+                on_date = excluded.on_date
             """,
             (
                 item["id"],
                 session_id,
-                item["direction"],
+                direction,
+                kind,
                 item["label"],
-                int(item["amount"]),
+                int(item.get("amount") or 0),
+                item.get("amount_min"),
+                item.get("amount_max"),
                 item.get("day"),
+                item.get("day_min"),
+                item.get("day_max"),
+                item.get("cadence") or "monthly",
+                item.get("status") or "unknown",
+                item.get("min_due"),
+                item.get("on_date"),
                 _now(),
             ),
         )
@@ -298,7 +369,9 @@ class Store:
     def list_transactions(self, session_id: str) -> list[dict[str, Any]]:
         rows = self._query(
             """
-            SELECT id, direction, label, amount, day, created_at
+            SELECT id, direction, kind, label, amount, amount_min, amount_max,
+                   day, day_min, day_max, cadence, status, min_due, on_date,
+                   created_at
               FROM transactions
              WHERE session_id = ?
              ORDER BY created_at
@@ -309,9 +382,18 @@ class Store:
             {
                 "id": row["id"],
                 "direction": row["direction"],
+                "kind": row["kind"],
                 "label": row["label"],
                 "amount": row["amount"],
+                "amount_min": row["amount_min"],
+                "amount_max": row["amount_max"],
                 "day": row["day"],
+                "day_min": row["day_min"],
+                "day_max": row["day_max"],
+                "cadence": row["cadence"],
+                "status": row["status"],
+                "min_due": row["min_due"],
+                "on_date": row["on_date"],
                 "created_at": row["created_at"],
             }
             for row in rows
@@ -399,6 +481,14 @@ async def set_session_status(**kwargs: Any) -> None:
 
 async def set_session_name(**kwargs: Any) -> None:
     await _safely(store.set_session_name, **kwargs)
+
+
+async def set_session_cash(**kwargs: Any) -> None:
+    await _safely(store.set_session_cash, **kwargs)
+
+
+async def set_session_advice(**kwargs: Any) -> None:
+    await _safely(store.set_session_advice, **kwargs)
 
 
 async def end_session(**kwargs: Any) -> None:

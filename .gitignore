@@ -30,6 +30,9 @@ out/
 # Logs
 *.log
 
+# Local Playwright dumps
+.playwright-mcp/
+
 # Local store (SQLite)
 apps/agent/data/
 *.db

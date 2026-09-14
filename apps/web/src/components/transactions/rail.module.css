@@ -1,0 +1,150 @@
+.rail {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 16px 28px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  color: var(--ink);
+}
+
+.group + .group {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+.group[data-pulse="true"] {
+  animation: pulse 1.1s ease;
+}
+
+@keyframes pulse {
+  0% {
+    background: var(--accent-tint);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group[data-pulse="true"] {
+    animation: none;
+  }
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-faint);
+}
+
+.row,
+.note {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+.row span:last-child,
+.note {
+  font-variant-numeric: tabular-nums;
+}
+
+.row span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row[data-crunch="true"] span:first-child {
+  color: var(--danger);
+}
+
+.row [data-tone="in"] {
+  color: var(--in);
+}
+
+.row [data-tone="out"] {
+  color: var(--danger);
+}
+
+.note[data-warn] {
+  color: var(--danger);
+  display: block;
+}
+
+.note {
+  display: block;
+}
+
+.adviceList {
+  margin: 0 0 12px;
+  padding: 0 0 0 1.1em;
+  list-style: disc;
+}
+
+.adviceList li {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.adviceList li:last-child {
+  margin-bottom: 0;
+}
+
+.payoff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--accent-tint);
+  color: var(--ink);
+}
+
+.payoff[data-ok="false"] {
+  background: var(--danger-tint);
+}
+
+.payoffLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.payoffBody {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.payoffBody [data-tone="in"] {
+  color: var(--in);
+}
+
+.payoffBody [data-tone="out"] {
+  color: var(--danger);
+}
+
+@media (max-width: 720px) {
+  .rail {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 42dvh;
+    padding-top: 16px;
+  }
+}

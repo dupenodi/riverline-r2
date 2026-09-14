@@ -28,6 +28,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+from pipecat.processors.aggregators.llm_context_summarizer import SummaryAppliedEvent
 from pipecat.processors.frameworks.rtvi.frames import RTVIServerMessageFrame
 from pipecat.services.sarvam.llm import SarvamLLMService
 from pipecat.services.sarvam.stt import SarvamRealtimeSTTService
@@ -37,7 +38,9 @@ from pipecat.transports.daily.transport import DailyParams, DailyTransport
 from pipecat.workers.runner import WorkerRunner
 
 import store
+from context_summary import assistant_aggregator_params
 from prompts import GREETING_PROMPT, STT_PROMPT, get_system_instruction
+from speech_gate import SpeechAudioGate
 from tools import MoneyTools
 from transcript import AgentTranscriptTap, TranscriptWriter, UserTranscriptTap
 
@@ -90,9 +93,14 @@ async def _run_pipeline(
         ),
     )
 
+    # Sarvam closes idle realtime sockets at ~60s (close 1008). Our SpeechAudioGate
+    # drops non-speech, so without pings the socket dies during agent talk / silence.
+    # Pipecat sends {"event":"ping"} when keepalive_timeout is set.
     stt = SarvamRealtimeSTTService(
         api_key=sarvam_key,
         endpointing="manual",
+        keepalive_timeout=30.0,
+        keepalive_interval=5.0,
         settings=SarvamRealtimeSTTService.Settings(
             language_code=language_code,
             stream_type="balanced",
@@ -115,7 +123,7 @@ async def _run_pipeline(
         text_aggregation_mode=TextAggregationMode.SENTENCE,
         settings=SarvamTTSService.Settings(
             model=os.getenv("SARVAM_TTS_MODEL", "bulbul:v3"),
-            voice=os.getenv("SARVAM_VOICE", "shubh"),
+            voice=os.getenv("SARVAM_VOICE", "rohan"),
             language=language_code,
             temperature=0.8,
         ),
@@ -131,27 +139,44 @@ async def _run_pipeline(
         persist_add=store.add_transaction,
         persist_remove=store.remove_transaction,
         persist_name=store.set_session_name,
+        persist_cash=store.set_session_cash,
+        persist_advice=store.set_session_advice,
         session_id=session_id,
+    )
+
+    vad = SileroVADAnalyzer(
+        params=VADParams(
+            confidence=0.7,
+            start_secs=0.1,
+            stop_secs=1.5,
+        ),
     )
 
     context = LLMContext(tools=money.schemas())
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(
-            vad_analyzer=SileroVADAnalyzer(
-                params=VADParams(
-                    stop_secs=1.5,
-                    confidence=0.5,
-                ),
-            ),
-        ),
+        user_params=LLMUserAggregatorParams(),
+        assistant_params=assistant_aggregator_params(api_key=sarvam_key),
     )
+
+    @assistant_aggregator.event_handler("on_summary_applied")
+    async def on_summary_applied(aggregator, summarizer, event: SummaryAppliedEvent):
+        logger.info(
+            "context summarized session_id={} {} -> {} messages "
+            "({} compressed, {} kept)",
+            session_id,
+            event.original_message_count,
+            event.new_message_count,
+            event.summarized_message_count,
+            event.preserved_message_count,
+        )
 
     turns = TranscriptWriter(session_id)
 
     pipeline = Pipeline(
         [
             transport.input(),
+            SpeechAudioGate(vad),
             stt,
             UserTranscriptTap(turns),
             user_aggregator,

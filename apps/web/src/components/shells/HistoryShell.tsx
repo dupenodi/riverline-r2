@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/atoms";
-import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
+import { MoneyBoard } from "@/components/transactions/MoneyBoard";
 import {
   getSessionHistory,
   listSessions,
   type SessionHistory,
   type SessionListItem,
 } from "@/lib/agent-api";
-import type { MoneyItem } from "@/lib/transactions";
+import {
+  EMPTY_TRANSACTIONS,
+  acceptTransactions,
+  hasBoard,
+  type MoneyItem,
+  type TransactionsState,
+} from "@/lib/transactions";
 import { AppFrame } from "./AppFrame";
 import styles from "./shells.module.css";
 
@@ -51,6 +57,22 @@ function toItems(raw: SessionHistory["transactions"]): MoneyItem[] {
     }));
 }
 
+function toState(detail: SessionHistory): TransactionsState {
+  return acceptTransactions(EMPTY_TRANSACTIONS, {
+    type: "finance",
+    version: 1,
+    name: detail.session.name,
+    cash: detail.cash ?? null,
+    items: toItems(detail.transactions),
+    entries: detail.entries ?? [],
+    missing: detail.missing ?? [],
+    conflicts: [],
+    derived: detail.derived,
+    plan: detail.plan ?? null,
+    advice: detail.advice ?? null,
+  });
+}
+
 export function HistoryShell({ onBack }: HistoryShellProps) {
   const [rows, setRows] = useState<SessionListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,11 +111,11 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
   }
 
   if (detail) {
-    const items = toItems(detail.transactions);
+    const money = toState(detail);
     const turns = detail.transcript;
     const title = detail.session.name?.trim() || "Past call";
     const duration = formatDuration(detail.session.duration_seconds);
-    const hasMoney = items.length > 0;
+    const hasMoney = hasBoard(money);
     const hasTurns = turns.length > 0;
 
     return (
@@ -114,7 +136,7 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
 
           {hasMoney ? (
             <div className={styles.planScroll}>
-              <MoneyCalendar state={{ items }} />
+              <MoneyBoard state={money} />
             </div>
           ) : (
             <div className={styles.reviewEmpty}>

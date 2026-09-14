@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SessionStatus(str, Enum):
@@ -88,6 +88,12 @@ class SessionHistoryResponse(BaseModel):
     session: SessionListItem
     transcript: list[TranscriptTurn]
     transactions: list[MoneyItem]
+    derived: dict | None = None
+    cash: int | None = None
+    entries: list[dict] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    plan: dict | None = None
+    advice: dict | None = None
 
 
 class ErrorBody(BaseModel):

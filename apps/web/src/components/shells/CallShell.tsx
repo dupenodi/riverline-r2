@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Image from "next/image";
 import { CallTimer } from "@/components/atoms";
-import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
+import { MoneyBoard } from "@/components/transactions/MoneyBoard";
 import type { LevelMeter } from "@/lib/audio-level";
 import {
   callMood,
@@ -11,7 +11,7 @@ import {
   moodMascot,
   moodPulses,
 } from "@/lib/call-mood";
-import type { TransactionsState } from "@/lib/transactions";
+import { hasBoard, type TransactionsState } from "@/lib/transactions";
 import { isEmpty, type Transcript } from "@/lib/transcript";
 import { AppFrame } from "./AppFrame";
 import { CaptionStream } from "./CaptionStream";
@@ -48,7 +48,7 @@ export function CallShell({
   onEnd,
   ending = false,
 }: CallShellProps) {
-  const hasMoney = transactions.items.length > 0;
+  const hasMoney = hasBoard(transactions);
   const hasLines = transcript.some((turn) => !isEmpty(turn));
   const youSpeaking = userSpeaking && !muted && !ending;
   const mood = callMood({
@@ -85,7 +85,7 @@ export function CallShell({
     <AppFrame>
       {hasMoney ? (
         <div className={styles.planScroll}>
-          <MoneyCalendar state={transactions} />
+          <MoneyBoard state={transactions} />
         </div>
       ) : (
         <div className={styles.talkStage}>

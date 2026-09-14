@@ -214,12 +214,13 @@ def test_end_session_fills_duration(db: Store) -> None:
 def test_session_history_bundles_everything(db: Store) -> None:
     _session(db, "s1")
     db.set_session_name(session_id="s1", name="Priya")
+    db.set_session_cash(session_id="s1", cash=8000)
     db.append_turn(session_id="s1", seq=1, role="user", text="Hi")
     db.add_transaction(
         session_id="s1",
         item={
             "id": "t1",
-            "direction": "incoming",
+            "kind": "income",
             "label": "Salary",
             "amount": 40000,
             "day": 1,
@@ -230,6 +231,9 @@ def test_session_history_bundles_everything(db: Store) -> None:
     assert history is not None
     assert history["session"]["session_id"] == "s1"
     assert history["session"]["name"] == "Priya"
+    assert history["session"]["cash"] == 8000
     assert history["transcript"][0]["text"] == "Hi"
     assert history["transactions"][0]["label"] == "Salary"
+    assert history["transactions"][0]["kind"] == "income"
+    assert history["transactions"][0]["direction"] == "incoming"
     assert history["transactions"][0]["day"] == 1
