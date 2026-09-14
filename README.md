@@ -110,13 +110,9 @@ computes those numbers.
 4. After every write the engine projects 30 days from today and pushes a versioned snapshot over RTVI. The web only renders that snapshot.
 5. Browser `DELETE /sessions/{id}` hangs up.
 
-Flow diagram: [docs/user-flow.png](docs/user-flow.png).
-
-Assignment tracker: [docs/TODO.md](docs/TODO.md).
-
 ## What this build does not do
 
 - No loans, credit lines, or investing suggestions (not in the planner vocabulary).
 - Hindi-only speech is untested (`language_code` is locked to `en-IN`; Hinglish works).
 - `/sessions` is unauthenticated (local demo).
-- Demo video and the decision journal live outside the generated docs (`DECISION_JOURNAL.md` is written by hand).
+- Demo video. Decision journal is `DECISION_JOURNAL.md`.

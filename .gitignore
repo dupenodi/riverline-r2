@@ -33,6 +33,9 @@ out/
 # Local Playwright dumps
 .playwright-mcp/
 
+# Local notes (not part of the repo)
+docs/
+
 # Local store (SQLite)
 apps/agent/data/
 *.db
