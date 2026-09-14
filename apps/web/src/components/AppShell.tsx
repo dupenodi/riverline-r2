@@ -84,7 +84,7 @@ export function AppShell() {
   const botAudioElRef = useRef<HTMLAudioElement | null>(null);
   const sessionRef = useRef<SessionCreated | null>(null);
   const callStartedAt = useRef<number | null>(null);
-  const cancelledRef = useRef(false);
+  const connectGenRef = useRef(0);
   const agentSpeakingRef = useRef(false);
 
   const micMeter = useMemo(() => new LevelMeter(), []);
@@ -141,10 +141,10 @@ export function AppShell() {
   }, [detachBotAudio, micMeter]);
 
   const resetToIdle = useCallback(() => {
-    cancelledRef.current = false;
     setPhase("idle");
     setConnectStep("mic");
     setSession(null);
+    sessionRef.current = null;
     setError(null);
     setNotice(null);
     setEndReason("user");
@@ -167,9 +167,10 @@ export function AppShell() {
   }, []);
 
   const handleCancelConnect = useCallback(async () => {
-    cancelledRef.current = true;
+    connectGenRef.current += 1;
     await teardownClient();
     const current = sessionRef.current;
+    sessionRef.current = null;
     if (current) {
       try {
         await endSession(current.session_id);
@@ -217,7 +218,9 @@ export function AppShell() {
   );
 
   const startCall = useCallback(async () => {
-    cancelledRef.current = false;
+    const gen = ++connectGenRef.current;
+    const cancelled = () => connectGenRef.current !== gen;
+
     setError(null);
     setNotice(null);
     setMuted(false);
@@ -230,7 +233,7 @@ export function AppShell() {
     setConnectStep("mic");
 
     const micOk = await requestMic();
-    if (cancelledRef.current) return;
+    if (cancelled()) return;
     if (!micOk) {
       setPhase("mic_blocked");
       return;
@@ -241,7 +244,7 @@ export function AppShell() {
     try {
       created = await createSession();
     } catch (err) {
-      if (cancelledRef.current) return;
+      if (cancelled()) return;
       setError(
         err instanceof Error
           ? err.message
@@ -251,7 +254,7 @@ export function AppShell() {
       return;
     }
 
-    if (cancelledRef.current) {
+    if (cancelled()) {
       try {
         await endSession(created.session_id);
       } catch {
@@ -260,6 +263,7 @@ export function AppShell() {
       return;
     }
 
+    sessionRef.current = created;
     setSession(created);
     setConnectStep("room");
 
@@ -268,10 +272,10 @@ export function AppShell() {
 
     if (scaffold) {
       await new Promise((r) => setTimeout(r, 600));
-      if (cancelledRef.current) return;
+      if (cancelled()) return;
       setConnectStep("assistant");
       await new Promise((r) => setTimeout(r, 400));
-      if (cancelledRef.current) return;
+      if (cancelled()) return;
       goLive();
       return;
     }
@@ -306,6 +310,7 @@ export function AppShell() {
           detachBotAudio();
         },
         onBotReady: () => {
+          if (cancelled()) return;
           setConnectStep("assistant");
         },
 
@@ -396,6 +401,7 @@ export function AppShell() {
           }
         },
         onError: (message) => {
+          if (cancelled()) return;
           const data = message?.data as
             | { error?: string; fatal?: boolean }
             | undefined;
@@ -408,11 +414,13 @@ export function AppShell() {
           }
         },
         onBotDisconnected: () => {
+          if (cancelled()) return;
           setError("Kubera dropped off the call.");
           void closeCall("dropped");
         },
         onDisconnected: () => {
           // Only meaningful if we did not ask for it.
+          if (cancelled()) return;
           if (clientRef.current) void closeCall("dropped");
         },
       },
@@ -425,14 +433,19 @@ export function AppShell() {
         url: created.room.url,
         token: created.client.token,
       });
-      if (cancelledRef.current) {
+      if (cancelled()) {
         await teardownClient();
+        try {
+          await endSession(created.session_id);
+        } catch {
+          /* ignore */
+        }
         return;
       }
       setConnectStep("assistant");
       goLive();
     } catch (err) {
-      if (cancelledRef.current) return;
+      if (cancelled()) return;
       await teardownClient();
       try {
         await endSession(created.session_id);
@@ -440,6 +453,7 @@ export function AppShell() {
         /* ignore */
       }
       setSession(null);
+      sessionRef.current = null;
       setError(
         err instanceof Error ? err.message : "Could not join the voice room.",
       );

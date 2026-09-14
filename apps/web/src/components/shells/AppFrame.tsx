@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { BrandMark } from "@/components/atoms";
 import styles from "./shells.module.css";
 
 type AppFrameProps = {
@@ -21,17 +20,18 @@ export function AppFrame({
         .filter(Boolean)
         .join(" ")}
     >
-      <header
-        className={[
-          styles.topBar,
-          transparent ? styles.topBarTransparent : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <BrandMark size="sm" />
-        {meta ? <div className={styles.topMeta}>{meta}</div> : null}
-      </header>
+      {meta ? (
+        <header
+          className={[
+            styles.topBar,
+            transparent ? styles.topBarTransparent : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <div className={styles.topMeta}>{meta}</div>
+        </header>
+      ) : null}
 
       <div className={styles.main}>{children}</div>
     </div>

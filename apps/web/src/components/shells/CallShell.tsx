@@ -1,25 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
+import Image from "next/image";
 import { CallTimer } from "@/components/atoms";
 import { PlanView } from "@/components/plan/PlanView";
 import type { LevelMeter } from "@/lib/audio-level";
+import {
+  callMood,
+  moodLabel,
+  moodMascot,
+  moodPulses,
+} from "@/lib/call-mood";
 import type { FinanceSnapshot } from "@/lib/finance";
 import { isEmpty, type Transcript } from "@/lib/transcript";
 import { AppFrame } from "./AppFrame";
 import { CaptionStream } from "./CaptionStream";
 import styles from "./shells.module.css";
-
-/**
- * The call.
- *
- * While there is no plan, the centre is live captions — Kubera and the user,
- * stacked like subtitles, newest at the bottom. Once a plan exists it takes
- * the room and the captions shrink to a strip under it.
- *
- * Mute and end stay in the dock. Status that used to live in a hearing strip
- * (Listening / Thinking / speaking) sits in the caption idle line instead.
- */
 
 type CallShellProps = {
   elapsedSeconds: number;
@@ -29,7 +25,6 @@ type CallShellProps = {
   thinking: boolean;
   transcript: Transcript;
   finance: FinanceSnapshot;
-  /** Kept for the call API; loudness bars left with the old hearing strip. */
   micMeter?: LevelMeter | null;
   connectionLabel?: string;
   notice?: string | null;
@@ -37,21 +32,6 @@ type CallShellProps = {
   onEnd: () => void;
   ending?: boolean;
 };
-
-function status(
-  muted: boolean,
-  agentSpeaking: boolean,
-  thinking: boolean,
-  ending: boolean,
-  hasLines: boolean,
-): string {
-  if (ending) return "Ending";
-  if (muted) return "Muted";
-  if (agentSpeaking) return "Kubera is speaking";
-  if (thinking) return "Thinking";
-  if (!hasLines) return "One moment — getting the line ready.";
-  return "Listening";
-}
 
 export function CallShell({
   elapsedSeconds,
@@ -70,7 +50,16 @@ export function CallShell({
 }: CallShellProps) {
   const planned = finance.plan != null;
   const hasLines = transcript.some((turn) => !isEmpty(turn));
-  const idle = status(muted, agentSpeaking, thinking, ending, hasLines);
+  const youSpeaking = userSpeaking && !muted && !ending;
+  const mood = callMood({
+    ending,
+    muted,
+    agentSpeaking,
+    thinking,
+    userSpeaking: youSpeaking,
+    hasLines,
+  });
+  const label = moodLabel(mood);
 
   useEffect(() => {
     if (ending) return;
@@ -93,9 +82,58 @@ export function CallShell({
   }, [ending, onEnd, onMute]);
 
   return (
-    <AppFrame
-      meta={
-        <>
+    <AppFrame>
+      {planned ? (
+        <div className={styles.planScroll}>
+          <PlanView snapshot={finance} />
+        </div>
+      ) : (
+        <div className={styles.talkStage}>
+          <div className={styles.talkHead}>
+            <Image
+              src={moodMascot(mood)}
+              alt=""
+              width={88}
+              height={88}
+              className={[
+                styles.talkMascot,
+                moodPulses(mood) ? styles.talkMascotPulse : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              priority
+            />
+            <p className={styles.talkMood} data-mood={mood} role="status">
+              {label}
+            </p>
+          </div>
+
+          <CaptionStream
+            transcript={transcript}
+            agentSpeaking={agentSpeaking}
+            userSpeaking={youSpeaking}
+          />
+        </div>
+      )}
+
+      {planned ? (
+        <CaptionStream
+          transcript={transcript}
+          compact
+          idle={label}
+          agentSpeaking={agentSpeaking}
+          userSpeaking={youSpeaking}
+        />
+      ) : null}
+
+      {notice ? (
+        <p className={styles.notice} role="status">
+          {notice}
+        </p>
+      ) : null}
+
+      <div className={styles.dock}>
+        <div className={styles.dockMeta}>
           <span
             className={styles.wire}
             data-live={!muted && !ending}
@@ -105,49 +143,28 @@ export function CallShell({
             {muted ? "Muted" : connectionLabel}
           </span>
           <CallTimer seconds={elapsedSeconds} />
-        </>
-      }
-    >
-      {planned ? (
-        <div className={styles.planScroll}>
-          <PlanView snapshot={finance} />
         </div>
-      ) : null}
-
-      <CaptionStream
-        transcript={transcript}
-        compact={planned}
-        idle={idle}
-        agentSpeaking={agentSpeaking}
-        userSpeaking={userSpeaking && !muted && !ending}
-      />
-
-      {notice ? (
-        <p className={styles.notice} role="status">
-          {notice}
-        </p>
-      ) : null}
-
-      <div className={styles.dock}>
-        <button
-          type="button"
-          className={styles.ctl}
-          onClick={onMute}
-          aria-pressed={muted}
-          disabled={ending}
-        >
-          {muted ? "Unmute" : "Mute"}
-          <kbd>M</kbd>
-        </button>
-        <button
-          type="button"
-          className={styles.ctlEnd}
-          onClick={onEnd}
-          disabled={ending}
-        >
-          {ending ? "Ending…" : "End call"}
-          <kbd>E</kbd>
-        </button>
+        <div className={styles.dockActions}>
+          <button
+            type="button"
+            className={styles.ctl}
+            onClick={onMute}
+            aria-pressed={muted}
+            disabled={ending}
+          >
+            {muted ? "Unmute" : "Mute"}
+            <kbd>M</kbd>
+          </button>
+          <button
+            type="button"
+            className={styles.ctlEnd}
+            onClick={onEnd}
+            disabled={ending}
+          >
+            {ending ? "Ending…" : "End call"}
+            <kbd>E</kbd>
+          </button>
+        </div>
       </div>
     </AppFrame>
   );

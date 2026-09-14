@@ -1,6 +1,8 @@
-import { BreathingOrb, Button, Icon, StatusDot } from "@/components/atoms";
+"use client";
+
+import Image from "next/image";
 import { AppFrame } from "./AppFrame";
-import styles from "./shells.module.css";
+import styles from "@/components/gate.module.css";
 
 type Step = "mic" | "session" | "room" | "assistant";
 
@@ -9,55 +11,32 @@ type ConnectingShellProps = {
   onCancel?: () => void;
 };
 
-const STEPS: { key: Step; label: string }[] = [
-  { key: "mic", label: "Microphone" },
-  { key: "session", label: "Session started" },
-  { key: "room", label: "Joining the room" },
-  { key: "assistant", label: "Waking Kubera" },
-];
+const STATUS: Record<Step, string> = {
+  mic: "Checking your microphone…",
+  session: "Starting up…",
+  room: "Connecting…",
+  assistant: "Almost there…",
+};
 
 export function ConnectingShell({ step, onCancel }: ConnectingShellProps) {
-  const current = STEPS.findIndex((s) => s.key === step);
-
   return (
-    <AppFrame meta={<StatusDot tone="warn" label="Joining" />}>
+    <AppFrame>
       <div className={styles.body}>
-        <BreathingOrb state="connecting" />
-        <div>
-          <h1 className={styles.title}>Getting the line ready</h1>
-          <p className={styles.hint}>Usually under a few seconds</p>
-        </div>
-
-        <ol className={styles.steps}>
-          {STEPS.map(({ key, label }, index) => {
-            const done = index < current;
-            const active = index === current;
-            return (
-              <li
-                key={key}
-                className={[
-                  styles.step,
-                  done ? styles.stepDone : styles.stepPending,
-                ].join(" ")}
-                aria-current={active ? "step" : undefined}
-              >
-                {done ? (
-                  <span className={styles.check} aria-hidden />
-                ) : active ? (
-                  <Icon name="spinner" size={14} />
-                ) : (
-                  <span className={styles.checkIdle} aria-hidden />
-                )}
-                {label}
-              </li>
-            );
-          })}
-        </ol>
+        <Image
+          src="/kubera-thinking.png"
+          alt=""
+          width={128}
+          height={128}
+          className={[styles.logo, styles.logoPulse].join(" ")}
+          priority
+        />
+        <h1 className={styles.title}>Kubera</h1>
+        <p className={styles.lede}>{STATUS[step]}</p>
 
         {onCancel ? (
-          <Button variant="secondary" onClick={onCancel}>
+          <button type="button" className={styles.ghost} onClick={onCancel}>
             Cancel
-          </Button>
+          </button>
         ) : null}
       </div>
     </AppFrame>

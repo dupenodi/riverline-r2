@@ -12,7 +12,7 @@ type CaptionStreamProps = {
   transcript: Transcript;
   /** Shorter strip under the plan once the calendar owns the room. */
   compact?: boolean;
-  /** Shown when there is nothing to caption yet. */
+  /** Shown when there is nothing to caption yet. Omit when mood lives above. */
   idle?: string;
   agentSpeaking?: boolean;
   userSpeaking?: boolean;
@@ -28,14 +28,13 @@ type CaptionStreamProps = {
 export function CaptionStream({
   transcript,
   compact = false,
-  idle = "Listening",
+  idle,
   agentSpeaking = false,
   userSpeaking = false,
 }: CaptionStreamProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lines = transcript.filter((turn) => !isEmpty(turn));
 
-  // Stick to the live edge whenever a word lands or an interim revises.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -51,7 +50,7 @@ export function CaptionStream({
       <div className={styles.captionsScroll} ref={scrollerRef}>
         <div className={styles.captionsStack}>
           {lines.length === 0 ? (
-            <p className={styles.captionIdle}>{idle}</p>
+            idle ? <p className={styles.captionIdle}>{idle}</p> : null
           ) : (
             lines.map((turn, index) => {
               const { spoken, pending } = turnCaption(turn);

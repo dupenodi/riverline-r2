@@ -1,0 +1,108 @@
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 24px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  text-align: center;
+}
+
+.logo {
+  width: 128px;
+  height: 128px;
+  border-radius: 28px;
+  object-fit: cover;
+}
+
+.logoPulse {
+  animation: gatePulse 2.2s ease-in-out infinite;
+}
+
+@keyframes gatePulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.03);
+    filter: brightness(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logoPulse {
+    animation: none;
+  }
+}
+
+.title {
+  margin: 2px 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 32ch;
+  text-wrap: pretty;
+  min-height: 1.5em;
+}
+
+.primary {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 26px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  cursor: pointer;
+  transition: filter 160ms ease;
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.primary:focus-visible,
+.ghost:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.ghost {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 11px 26px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.ghost:hover {
+  border-color: var(--border-strong);
+  color: var(--ink-soft);
+}
