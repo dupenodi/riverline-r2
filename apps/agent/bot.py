@@ -38,6 +38,7 @@ from pipecat.workers.runner import WorkerRunner
 
 import store
 from tools import FinanceTools
+from transcript import AgentTranscriptTap, TranscriptWriter, UserTranscriptTap
 
 # session_id → running WorkerRunner + its host task
 _running: dict[str, "_RunningBot"] = {}
@@ -223,12 +224,16 @@ async def _run_pipeline(
         ),
     )
 
+    turns = TranscriptWriter(session_id)
+
     pipeline = Pipeline(
         [
             transport.input(),
             stt,
+            UserTranscriptTap(turns),
             user_aggregator,
             llm,
+            AgentTranscriptTap(turns),
             tts,
             transport.output(),
             assistant_aggregator,

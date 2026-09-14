@@ -118,3 +118,52 @@ export async function endSession(sessionId: string): Promise<void> {
   }
   throw new Error(message);
 }
+
+export interface SessionListItem {
+  session_id: string;
+  status: string;
+  created_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  ended_reason: string | null;
+  name: string | null;
+  has_plan: boolean;
+}
+
+export interface TranscriptTurn {
+  seq: number;
+  role: "user" | "agent";
+  text: string;
+  interrupted: boolean;
+  created_at: string;
+}
+
+export interface SessionHistory {
+  session: SessionListItem;
+  transcript: TranscriptTurn[];
+  finance: Record<string, unknown> | null;
+}
+
+export async function listSessions(
+  limit = 50,
+): Promise<SessionListItem[]> {
+  const res = await fetch(`${AGENT_URL}/sessions?limit=${limit}`);
+  if (!res.ok) {
+    throw new Error(`listSessions failed (${res.status})`);
+  }
+  return (await res.json()) as SessionListItem[];
+}
+
+export async function getSessionHistory(
+  sessionId: string,
+): Promise<SessionHistory> {
+  const res = await fetch(`${AGENT_URL}/sessions/${sessionId}/history`);
+  const data = (await res.json()) as SessionHistory | ApiError;
+  if (!res.ok) {
+    const err = data as ApiError;
+    throw new Error(
+      err.error?.message || `getSessionHistory failed (${res.status})`,
+    );
+  }
+  return data as SessionHistory;
+}

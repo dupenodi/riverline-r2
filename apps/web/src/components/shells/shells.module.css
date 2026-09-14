@@ -603,3 +603,93 @@
     gap: 2px;
   }
 }
+
+/* --- past calls ---------------------------------------------------------- */
+
+.historyPage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 28px 32px;
+  gap: 16px;
+}
+
+.historyBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.historyTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.016em;
+}
+
+.historyMeta {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.historyEmpty {
+  margin: 24px 0 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.historyRow {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.historyRow:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.historyRow:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.historyRowTitle {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.historyRowMeta {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 44rem) {
+  .historyPage {
+    padding: 14px 16px 28px;
+  }
+}

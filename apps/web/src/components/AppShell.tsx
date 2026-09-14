@@ -7,6 +7,7 @@ import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { CallShell } from "@/components/shells/CallShell";
 import { ConnectingShell } from "@/components/shells/ConnectingShell";
 import { EndedShell } from "@/components/shells/EndedShell";
+import { HistoryShell } from "@/components/shells/HistoryShell";
 import { MicBlockedShell } from "@/components/shells/MicBlockedShell";
 import {
   createSession,
@@ -33,6 +34,7 @@ import {
 
 type Phase =
   | "idle"
+  | "history"
   | "mic_blocked"
   | "connecting"
   | "ready"
@@ -483,7 +485,16 @@ export function AppShell() {
   }, [micMeter]);
 
   if (phase === "idle") {
-    return <WelcomeScreen onStart={startCall} />;
+    return (
+      <WelcomeScreen
+        onStart={startCall}
+        onHistory={() => setPhase("history")}
+      />
+    );
+  }
+
+  if (phase === "history") {
+    return <HistoryShell onBack={() => setPhase("idle")} />;
   }
 
   if (phase === "mic_blocked") {

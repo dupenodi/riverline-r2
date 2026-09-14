@@ -8,8 +8,15 @@ Conversational voice bot: **Sarvam realtime STT → Sarvam LLM → Sarvam TTS**
 |--------|------|---------|
 | `GET` | `/health` | Liveness |
 | `POST` | `/sessions` | Create Daily room, start bot, return client token |
-| `GET` | `/sessions/{id}` | Session status |
+| `GET` | `/sessions` | List past sessions (newest first) |
+| `GET` | `/sessions/{id}` | Session status (live memory, else SQLite) |
+| `GET` | `/sessions/{id}/transcript` | Settled turns for a session |
+| `GET` | `/sessions/{id}/history` | Meta + transcript + latest finance |
+| `GET` | `/sessions/{id}/finance` | Latest finance snapshot |
 | `DELETE` | `/sessions/{id}` | End session (idempotent) |
+
+Sessions, transcripts, and finance snapshots live in SQLite
+(`apps/agent/data/kubera.db`, or `KUBERA_DB_PATH`).
 
 ## Setup
 

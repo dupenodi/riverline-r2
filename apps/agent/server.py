@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -17,18 +19,22 @@ import bot
 import daily_rooms as daily
 import store as db
 from schemas import (
+    ClientCredentials,
     CreateSessionRequest,
+    RoomInfo,
     SessionCreatedResponse,
+    SessionHistoryResponse,
+    SessionListItem,
     SessionStatus,
     SessionStatusResponse,
-    ClientCredentials,
-    RoomInfo,
+    TranscriptResponse,
+    TranscriptTurn,
     error_payload,
 )
 from sessions import store
 
+
 def _load_env() -> None:
-    """Load .env from monorepo root (local) and/or CWD (Docker env_file still wins)."""
     here = Path(__file__).resolve().parent
     for candidate in (here.parent.parent / ".env", here / ".env", Path.cwd() / ".env"):
         if candidate.is_file():
@@ -42,7 +48,6 @@ _load_env()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Open the local store for the life of the process."""
     db.configure(os.getenv("KUBERA_DB_PATH"))
     await db.init()
     try:
@@ -62,9 +67,60 @@ app.add_middleware(
 )
 
 
+def _parse_dt(value: str | datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _list_item(row: dict[str, Any]) -> SessionListItem:
+    return SessionListItem(
+        session_id=row["session_id"],
+        status=row.get("status") or "ended",
+        created_at=row.get("created_at") or "",
+        ended_at=row.get("ended_at"),
+        duration_seconds=row.get("duration_seconds"),
+        ended_reason=row.get("ended_reason"),
+        name=row.get("name"),
+        has_plan=bool(row.get("has_plan")),
+    )
+
+
+def _turns(rows: list[dict[str, Any]]) -> list[TranscriptTurn]:
+    out: list[TranscriptTurn] = []
+    for row in rows:
+        role = row["role"]
+        if role not in ("user", "agent"):
+            continue
+        out.append(
+            TranscriptTurn(
+                seq=row["seq"],
+                role=role,
+                text=row["text"],
+                interrupted=bool(row.get("interrupted")),
+                created_at=row["created_at"],
+            )
+        )
+    return out
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/sessions", response_model=list[SessionListItem])
+async def list_sessions(
+    limit: int = Query(50, ge=1, le=200),
+    user_id: str | None = None,
+) -> list[SessionListItem]:
+    rows = await db.list_sessions(limit=limit, user_id=user_id)
+    return [_list_item(row) for row in rows]
 
 
 @app.post(
@@ -80,18 +136,13 @@ async def health() -> dict[str, str]:
 async def create_session(
     body: CreateSessionRequest | None = None,
 ) -> SessionCreatedResponse | JSONResponse:
-    """
-    Start a voice session: create Daily room + tokens, start bot, return client creds.
-
-    Scaffold: create Daily room + tokens, start Kubera bot, return client creds.
-    """
     body = body or CreateSessionRequest()
     user_id = body.client.user_id if body.client else None
     logger.info("POST /sessions user_id={}", user_id)
 
     try:
         creds = await daily.create_room_and_tokens()
-    except Exception as exc:  # noqa: BLE001 — scaffold boundary
+    except Exception as exc:  # noqa: BLE001
         logger.exception("room create failed")
         return JSONResponse(
             status_code=502,
@@ -128,8 +179,10 @@ async def create_session(
     except Exception as exc:  # noqa: BLE001
         logger.exception("bot start failed session_id={}", session.session_id)
         store.set_status(session.session_id, SessionStatus.error)
-        await db.set_session_status(
-            session_id=session.session_id, status=SessionStatus.error.value
+        await db.end_session(
+            session_id=session.session_id,
+            status=SessionStatus.error.value,
+            ended_reason="error",
         )
         await daily.delete_room(session.room_name)
         return JSONResponse(
@@ -141,6 +194,9 @@ async def create_session(
         )
 
     store.set_status(session.session_id, SessionStatus.ready)
+    await db.set_session_status(
+        session_id=session.session_id, status=SessionStatus.ready.value
+    )
 
     return SessionCreatedResponse(
         session_id=session.session_id,
@@ -160,22 +216,88 @@ async def create_session(
     responses={404: {"description": "Session not found"}},
 )
 async def get_session(session_id: str) -> SessionStatusResponse | JSONResponse:
-    session = store.get(session_id)
-    if session is None:
+    live = store.get(session_id)
+    if live is not None:
+        return SessionStatusResponse(
+            session_id=live.session_id,
+            status=live.status,
+            room=RoomInfo(
+                url=live.room_url,
+                name=live.room_name,
+                expires_at=live.expires_at,
+            ),
+            created_at=live.created_at,
+        )
+
+    row = await db.get_session(session_id)
+    if row is None:
         return JSONResponse(
             status_code=404,
             content=error_payload("session_not_found", f"Unknown session {session_id}"),
         )
 
+    created = _parse_dt(row.get("created_at")) or datetime.now(timezone.utc)
+    ended = _parse_dt(row.get("ended_at"))
+    try:
+        status = SessionStatus(row["status"])
+    except ValueError:
+        status = SessionStatus.ended
+
     return SessionStatusResponse(
-        session_id=session.session_id,
-        status=session.status,
+        session_id=row["session_id"],
+        status=status,
         room=RoomInfo(
-            url=session.room_url,
-            name=session.room_name,
-            expires_at=session.expires_at,
+            url=row.get("room_url") or "",
+            name=row.get("room_name") or "",
+            expires_at=created + timedelta(hours=1),
         ),
-        created_at=session.created_at,
+        created_at=created,
+        ended_at=ended,
+        duration_seconds=row.get("duration_seconds"),
+    )
+
+
+@app.get(
+    "/sessions/{session_id}/transcript",
+    response_model=TranscriptResponse,
+    responses={404: {"description": "Session not found"}},
+)
+async def get_transcript(session_id: str) -> TranscriptResponse | JSONResponse:
+    row = await db.get_session(session_id)
+    if row is None and store.get(session_id) is None:
+        return JSONResponse(
+            status_code=404,
+            content=error_payload("session_not_found", f"Unknown session {session_id}"),
+        )
+    turns = await db.list_transcript(session_id)
+    return TranscriptResponse(session_id=session_id, turns=_turns(turns))
+
+
+@app.get(
+    "/sessions/{session_id}/history",
+    response_model=SessionHistoryResponse,
+    responses={404: {"description": "Session not found"}},
+)
+async def get_history(session_id: str) -> SessionHistoryResponse | JSONResponse:
+    history = await db.session_history(session_id)
+    if history is None:
+        return JSONResponse(
+            status_code=404,
+            content=error_payload("session_not_found", f"Unknown session {session_id}"),
+        )
+    meta = history["session"]
+    snap = history["finance"]
+    item = _list_item(
+        {
+            **meta,
+            "name": snap.get("name") if snap else None,
+            "has_plan": bool(snap and snap.get("plan")),
+        }
+    )
+    return SessionHistoryResponse(
+        session=item,
+        transcript=_turns(history["transcript"]),
+        finance=snap,
     )
 
 
@@ -184,12 +306,6 @@ async def get_session(session_id: str) -> SessionStatusResponse | JSONResponse:
     responses={404: {"description": "Nothing recorded for this session"}},
 )
 async def get_finance(session_id: str) -> JSONResponse:
-    """The last snapshot this session published.
-
-    Read straight from the local store rather than from the bot, so it still
-    answers after the call has ended and after the process has restarted — the
-    numbers are the point of the call and they outlive the room.
-    """
     payload = await db.latest_snapshot(session_id)
     if payload is None:
         return JSONResponse(
@@ -209,13 +325,21 @@ async def get_finance(session_id: str) -> JSONResponse:
     },
 )
 async def end_session(session_id: str) -> Response:
-    """End a session (idempotent if already ended)."""
     session = store.get(session_id)
     if session is None:
-        return JSONResponse(
-            status_code=404,
-            content=error_payload("session_not_found", f"Unknown session {session_id}"),
+        # Still mark durable row ended if it exists (idempotent hang-up).
+        row = await db.get_session(session_id)
+        if row is None:
+            return JSONResponse(
+                status_code=404,
+                content=error_payload(
+                    "session_not_found", f"Unknown session {session_id}"
+                ),
+            )
+        await db.end_session(
+            session_id=session_id, status="ended", ended_reason="user"
         )
+        return Response(status_code=204)
 
     if session.status == SessionStatus.ended:
         return Response(status_code=204)
@@ -224,8 +348,10 @@ async def end_session(session_id: str) -> Response:
     await bot.cancel_bot(session_id=session_id)
     await daily.delete_room(session.room_name)
     store.set_status(session_id, SessionStatus.ended)
-    await db.set_session_status(
-        session_id=session_id, status=SessionStatus.ended.value
+    await db.end_session(
+        session_id=session_id,
+        status=SessionStatus.ended.value,
+        ended_reason="user",
     )
     logger.info("DELETE /sessions/{} ended", session_id)
     return Response(status_code=204)

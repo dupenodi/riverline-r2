@@ -6,10 +6,15 @@ import styles from "./gate.module.css";
 
 type WelcomeScreenProps = {
   onStart: () => void;
+  onHistory?: () => void;
   busy?: boolean;
 };
 
-export function WelcomeScreen({ onStart, busy = false }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  onStart,
+  onHistory,
+  busy = false,
+}: WelcomeScreenProps) {
   return (
     <AppFrame>
       <div className={styles.body}>
@@ -32,6 +37,17 @@ export function WelcomeScreen({ onStart, busy = false }: WelcomeScreenProps) {
         >
           {busy ? "Waking Kubera…" : "Talk to Kubera"}
         </button>
+
+        {onHistory ? (
+          <button
+            type="button"
+            className={styles.ghost}
+            onClick={onHistory}
+            disabled={busy}
+          >
+            Past calls
+          </button>
+        ) : null}
       </div>
     </AppFrame>
   );

@@ -47,6 +47,38 @@ class SessionStatusResponse(BaseModel):
     status: SessionStatus
     room: RoomInfo
     created_at: datetime
+    ended_at: datetime | None = None
+    duration_seconds: int | None = None
+
+
+class SessionListItem(BaseModel):
+    session_id: str
+    status: str
+    created_at: str
+    ended_at: str | None = None
+    duration_seconds: int | None = None
+    ended_reason: str | None = None
+    name: str | None = None
+    has_plan: bool = False
+
+
+class TranscriptTurn(BaseModel):
+    seq: int
+    role: Literal["user", "agent"]
+    text: str
+    interrupted: bool = False
+    created_at: str
+
+
+class TranscriptResponse(BaseModel):
+    session_id: str
+    turns: list[TranscriptTurn]
+
+
+class SessionHistoryResponse(BaseModel):
+    session: SessionListItem
+    transcript: list[TranscriptTurn]
+    finance: dict | None = None
 
 
 class ErrorBody(BaseModel):
@@ -64,6 +96,7 @@ ErrorCode = Literal[
     "room_create_failed",
     "bot_start_failed",
     "session_not_found",
+    "no_finance_state",
 ]
 
 
