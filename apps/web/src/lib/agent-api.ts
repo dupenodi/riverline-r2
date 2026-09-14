@@ -127,7 +127,7 @@ export interface SessionListItem {
   duration_seconds: number | null;
   ended_reason: string | null;
   name: string | null;
-  has_plan: boolean;
+  tx_count: number;
 }
 
 export interface TranscriptTurn {
@@ -138,10 +138,19 @@ export interface TranscriptTurn {
   created_at: string;
 }
 
+export interface MoneyItem {
+  id: string;
+  direction: "incoming" | "outgoing";
+  label: string;
+  amount: number;
+  day?: number | null;
+  created_at?: string | null;
+}
+
 export interface SessionHistory {
   session: SessionListItem;
   transcript: TranscriptTurn[];
-  finance: Record<string, unknown> | null;
+  transactions: MoneyItem[];
 }
 
 export async function listSessions(

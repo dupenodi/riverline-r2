@@ -1,8 +1,8 @@
 # Kubera agent (Pipecat + Daily)
 
-Conversational voice bot: **Sarvam realtime STT → Sarvam LLM → Sarvam TTS**
-([realtime STT example](https://github.com/pipecat-ai/pipecat/blob/main/examples/voice/voice-sarvam-realtime.py),
-[function-calling example](https://github.com/pipecat-ai/pipecat/blob/main/examples/function-calling/function-calling-sarvam.py)).
+Conversational voice bot: **Sarvam realtime STT → Sarvam LLM → Sarvam TTS**.
+
+Collects simple incoming/outgoing money items via tools and stores them in SQLite.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -11,11 +11,11 @@ Conversational voice bot: **Sarvam realtime STT → Sarvam LLM → Sarvam TTS**
 | `GET` | `/sessions` | List past sessions (newest first) |
 | `GET` | `/sessions/{id}` | Session status (live memory, else SQLite) |
 | `GET` | `/sessions/{id}/transcript` | Settled turns for a session |
-| `GET` | `/sessions/{id}/history` | Meta + transcript + latest finance |
-| `GET` | `/sessions/{id}/finance` | Latest finance snapshot |
+| `GET` | `/sessions/{id}/history` | Meta + transcript + transactions |
+| `GET` | `/sessions/{id}/transactions` | Money items for a session |
 | `DELETE` | `/sessions/{id}` | End session (idempotent) |
 
-Sessions, transcripts, and finance snapshots live in SQLite
+Sessions, transcripts, and transactions live in SQLite
 (`apps/agent/data/kubera.db`, or `KUBERA_DB_PATH`).
 
 ## Setup

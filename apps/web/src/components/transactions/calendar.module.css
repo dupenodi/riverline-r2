@@ -1,0 +1,269 @@
+.wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 20px 28px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.inner {
+  width: min(100%, 28rem);
+  margin: 0 auto;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 0 2px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.legend {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.dotIn,
+.dotOut {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 4px;
+}
+
+.dotIn {
+  background: var(--in);
+}
+
+.dotOut {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.cal {
+  overflow: visible;
+}
+
+.calHead,
+.calBody {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.weekday {
+  padding: 8px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+  border-bottom: 1px solid var(--hairline);
+  text-align: center;
+}
+
+.pad {
+  border-bottom: 1px solid var(--hairline);
+  min-height: 52px;
+}
+
+.cell {
+  position: relative;
+  min-height: 52px;
+  padding: 8px 4px 10px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  z-index: 0;
+}
+
+.cellOpen {
+  z-index: 5;
+}
+
+.cellNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+}
+
+.cellNum[data-today="true"] {
+  color: var(--accent-soft);
+  font-weight: 700;
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  flex: none;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.swatch:disabled {
+  cursor: default;
+}
+
+.swatch:not(:disabled):hover {
+  transform: scale(1.15);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.tone_quiet {
+  background: var(--border-soft);
+  border-color: var(--border);
+}
+
+.tone_out {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.tone_in {
+  background: var(--in);
+  border-color: var(--in);
+}
+
+.tone_both {
+  background: conic-gradient(var(--in) 0 180deg, var(--danger) 180deg);
+  border-color: var(--danger-ring);
+}
+
+.tone_today {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+.popover {
+  position: fixed;
+  z-index: 40;
+  width: max(11.5rem, 12vw);
+  min-width: 11.5rem;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 10px 28px oklch(0.24 0.022 162 / 0.12);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.popoverBelow {
+  transform: translateX(-50%);
+}
+
+.popoverAbove {
+  transform: translate(-50%, -100%);
+}
+
+.popoverOpen {
+  pointer-events: auto;
+}
+
+.popoverDate {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.popoverBalance {
+  margin: 4px 0 0;
+  font-size: 16px;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.popoverTone {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.popoverEmpty {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-ghost);
+}
+
+.popoverMoves {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.popoverMoves li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.popoverMoves li span:last-child {
+  white-space: nowrap;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 44rem) {
+  .cell {
+    min-height: 48px;
+    padding: 6px 2px 8px;
+  }
+
+  .swatch {
+    width: 12px;
+    height: 12px;
+  }
+
+  .title {
+    font-size: 18px;
+  }
+}

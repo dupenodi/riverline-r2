@@ -17,10 +17,10 @@ import {
 } from "@/lib/agent-api";
 import { LevelMeter } from "@/lib/audio-level";
 import {
-  acceptSnapshot,
-  EMPTY_SNAPSHOT,
-  type FinanceSnapshot,
-} from "@/lib/finance";
+  acceptTransactions,
+  EMPTY_TRANSACTIONS,
+  type TransactionsState,
+} from "@/lib/transactions";
 import {
   agentSegment,
   agentTurnEnded,
@@ -80,7 +80,8 @@ export function AppShell() {
   const [thinking, setThinking] = useState(false);
   const [scaffoldMode, setScaffoldMode] = useState(false);
   const [transcript, setTranscript] = useState<Transcript>([]);
-  const [finance, setFinance] = useState<FinanceSnapshot>(EMPTY_SNAPSHOT);
+  const [transactions, setTransactions] =
+    useState<TransactionsState>(EMPTY_TRANSACTIONS);
 
   const clientRef = useRef<PipecatClient | null>(null);
   const botAudioElRef = useRef<HTMLAudioElement | null>(null);
@@ -157,7 +158,7 @@ export function AppShell() {
     setThinking(false);
     setScaffoldMode(false);
     setTranscript([]);
-    setFinance(EMPTY_SNAPSHOT);
+    setTransactions(EMPTY_TRANSACTIONS);
     callStartedAt.current = null;
   }, []);
 
@@ -230,7 +231,7 @@ export function AppShell() {
     setUserTalking(false);
     setThinking(false);
     setTranscript([]);
-    setFinance(EMPTY_SNAPSHOT);
+    setTransactions(EMPTY_TRANSACTIONS);
     setPhase("connecting");
     setConnectStep("mic");
 
@@ -393,13 +394,10 @@ export function AppShell() {
 
         onServerMessage: (data) => {
           const message = data as { type?: string; state?: unknown } | null;
-
-          // The whole picture arrives as one versioned snapshot after every
-          // change, and the cards are a pure function of it. Nothing here
-          // recomputes money: a second implementation of the maths in the
-          // browser could disagree with the tested one.
-          if (message?.type === "finance_state") {
-            setFinance((current) => acceptSnapshot(current, message.state));
+          if (message?.type === "transactions") {
+            setTransactions((current) =>
+              acceptTransactions(current, message.state),
+            );
           }
         },
         onError: (message) => {
@@ -516,7 +514,7 @@ export function AppShell() {
         userSpeaking={userTalking}
         thinking={thinking}
         transcript={transcript}
-        finance={finance}
+        transactions={transactions}
         micMeter={micMeter}
         connectionLabel={scaffoldMode ? "Scaffold" : "Connected"}
         notice={notice}
@@ -532,7 +530,7 @@ export function AppShell() {
       <EndedShell
         durationSeconds={lastDuration}
         transcript={transcript}
-        finance={finance}
+        transactions={transactions}
         reason={phase === "error" ? "dropped" : endReason}
         onRestart={resetToIdle}
         error={error}

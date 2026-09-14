@@ -1,41 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { PlanView } from "@/components/plan/PlanView";
 import { CallShell } from "@/components/shells/CallShell";
 import { EndedShell } from "@/components/shells/EndedShell";
-import fixtures from "@/lib/fixtures/snapshots.json";
-import type { FinanceSnapshot } from "@/lib/finance";
+import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
+import type { TransactionsState } from "@/lib/transactions";
 import styles from "./preview.module.css";
 
-/**
- * Plan screens driven by recorded planner output instead of a phone call.
- */
-
-const CASES: { key: keyof typeof fixtures; label: string; blurb: string }[] = [
-  {
-    key: "early",
-    label: "Mid-conversation",
-    blurb: "A balance and two bills. No plan asked for yet.",
-  },
-  {
-    key: "tight",
-    label: "Tight but solvable",
-    blurb: "Salary lands after the rent. Works, once two things are put off.",
-  },
-  {
-    key: "unsolvable",
-    label: "Does not balance",
-    blurb: "Nothing left to cut. The gap is stated, not dressed up.",
-  },
-];
+const SAMPLE: TransactionsState = {
+  type: "transactions",
+  version: 1,
+  name: "Priya",
+  items: [
+    { id: "1", direction: "incoming", label: "Salary", amount: 50000, day: 1 },
+    { id: "2", direction: "outgoing", label: "Rent", amount: 20000, day: 5 },
+    { id: "3", direction: "outgoing", label: "HDFC EMI", amount: 8500, day: 10 },
+    { id: "4", direction: "outgoing", label: "Electricity", amount: 1200, day: 15 },
+    { id: "5", direction: "incoming", label: "Freelance", amount: 8000, day: 20 },
+  ],
+};
 
 export default function PreviewPage() {
-  const [active, setActive] = useState<keyof typeof fixtures>("tight");
   const [inCall, setInCall] = useState(false);
   const [ended, setEnded] = useState(false);
-  const snapshot = fixtures[active] as unknown as FinanceSnapshot;
-  const blurb = CASES.find((entry) => entry.key === active)?.blurb;
 
   if (ended) {
     return (
@@ -43,7 +30,7 @@ export default function PreviewPage() {
         <EndedShell
           durationSeconds={244}
           transcript={[]}
-          finance={snapshot}
+          transactions={SAMPLE}
           reason="user"
           onRestart={() => setEnded(false)}
         />
@@ -52,7 +39,7 @@ export default function PreviewPage() {
           onClick={() => setEnded(false)}
           className={styles.escape}
         >
-          Back to cards
+          Back
         </button>
       </>
     );
@@ -68,7 +55,7 @@ export default function PreviewPage() {
           userSpeaking={false}
           thinking={false}
           transcript={[]}
-          finance={snapshot}
+          transactions={SAMPLE}
           connectionLabel="Preview"
           onMute={() => {}}
           onEnd={() => setInCall(false)}
@@ -78,7 +65,7 @@ export default function PreviewPage() {
           onClick={() => setInCall(false)}
           className={styles.escape}
         >
-          Back to cards
+          Back
         </button>
       </>
     );
@@ -86,44 +73,16 @@ export default function PreviewPage() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.head}>
-        <h1 className={styles.title}>Plan preview</h1>
-        <div className={styles.tabs}>
-          {CASES.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => setActive(entry.key)}
-              className={active === entry.key ? styles.tabOn : styles.tab}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
-        <p className={styles.blurb}>{blurb}</p>
-        <button
-          type="button"
-          onClick={() => setInCall(true)}
-          className={styles.tab}
-        >
-          See it in the call layout
+      <h1 className={styles.title}>Money calendar preview</h1>
+      <MoneyCalendar state={SAMPLE} />
+      <div className={styles.actions}>
+        <button type="button" onClick={() => setInCall(true)}>
+          In call
         </button>
-        <button
-          type="button"
-          onClick={() => setEnded(true)}
-          className={styles.tab}
-        >
-          See the hung-up screen
+        <button type="button" onClick={() => setEnded(true)}>
+          Ended
         </button>
-      </header>
-
-      {snapshot.plan ? (
-        <div className={styles.planStage}>
-          <PlanView snapshot={snapshot} />
-        </div>
-      ) : (
-        <p className={styles.blurb}>No plan in this fixture yet.</p>
-      )}
+      </div>
     </main>
   );
 }

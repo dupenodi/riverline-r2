@@ -1,6 +1,6 @@
-# Kubera — voice finance agent
+# Kubera — voice money agent
 
-Monorepo for a conversational voice agent:
+Monorepo for a conversational voice agent that collects incoming/outgoing money details:
 
 | Path | Role |
 |------|------|

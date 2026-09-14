@@ -65,11 +65,18 @@
   cursor: pointer;
 }
 
-.planStage {
-  max-width: 42rem;
-  margin: 20px auto 0;
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.actions button {
+  padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
-  overflow: visible;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
 }

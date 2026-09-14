@@ -1,4 +1,4 @@
-"""Durable storage for sessions, transcripts, and finance snapshots.
+"""Durable storage for sessions, transcripts, and money transactions.
 
 SQLite on local disk. Writes are fire-and-forget from the call path so
 persistence never adds latency to a live conversation.
@@ -7,7 +7,6 @@ persistence never adds latency to a live conversation.
 from __future__ import annotations
 
 import asyncio
-import json
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -26,15 +25,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at  TEXT NOT NULL,
     ended_at    TEXT,
     duration_seconds INTEGER,
-    ended_reason TEXT
+    ended_reason TEXT,
+    name        TEXT
 );
 
-CREATE TABLE IF NOT EXISTS snapshots (
+CREATE TABLE IF NOT EXISTS transactions (
+    id          TEXT PRIMARY KEY,
     session_id  TEXT NOT NULL,
-    version     INTEGER NOT NULL,
-    payload     TEXT NOT NULL,
-    created_at  TEXT NOT NULL,
-    PRIMARY KEY (session_id, version)
+    direction   TEXT NOT NULL,
+    label       TEXT NOT NULL,
+    amount      INTEGER NOT NULL,
+    day         INTEGER,
+    created_at  TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS transcript_turns (
@@ -47,8 +49,8 @@ CREATE TABLE IF NOT EXISTS transcript_turns (
     PRIMARY KEY (session_id, seq)
 );
 
-CREATE INDEX IF NOT EXISTS snapshots_by_session
-    ON snapshots (session_id, version DESC);
+CREATE INDEX IF NOT EXISTS tx_by_session
+    ON transactions (session_id, created_at);
 
 CREATE INDEX IF NOT EXISTS sessions_by_user
     ON sessions (user_id, created_at DESC);
@@ -61,6 +63,11 @@ CREATE INDEX IF NOT EXISTS transcript_by_session
 _SESSION_COLUMNS = {
     "duration_seconds": "INTEGER",
     "ended_reason": "TEXT",
+    "name": "TEXT",
+}
+
+_TRANSACTION_COLUMNS = {
+    "day": "INTEGER",
 }
 
 
@@ -107,6 +114,16 @@ class Store:
         for name, sql_type in _SESSION_COLUMNS.items():
             if name not in existing:
                 conn.execute(f"ALTER TABLE sessions ADD COLUMN {name} {sql_type}")
+
+        tx_existing = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(transactions)").fetchall()
+        }
+        for name, sql_type in _TRANSACTION_COLUMNS.items():
+            if name not in tx_existing:
+                conn.execute(
+                    f"ALTER TABLE transactions ADD COLUMN {name} {sql_type}"
+                )
 
     def close(self) -> None:
         with self._lock:
@@ -161,6 +178,12 @@ class Store:
         )
         if ended:
             self._fill_duration(session_id)
+
+    def set_session_name(self, *, session_id: str, name: str) -> None:
+        self._execute(
+            "UPDATE sessions SET name = ? WHERE session_id = ?",
+            (name, session_id),
+        )
 
     def end_session(
         self,
@@ -236,55 +259,63 @@ class Store:
         out: list[dict[str, Any]] = []
         for row in rows:
             item = dict(row)
-            snap = self.latest_snapshot(row["session_id"])
-            item["name"] = snap.get("name") if snap else None
-            item["has_plan"] = bool(snap and snap.get("plan"))
+            txs = self.list_transactions(row["session_id"])
+            item["tx_count"] = len(txs)
             out.append(item)
         return out
 
-    # --- snapshots ----------------------------------------------------------
+    # --- transactions -------------------------------------------------------
 
-    def save_snapshot(self, *, session_id: str, payload: dict[str, Any]) -> None:
-        version = int(payload.get("version", 0))
+    def add_transaction(self, *, session_id: str, item: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO snapshots (session_id, version, payload, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(session_id, version) DO UPDATE SET
-                payload = excluded.payload,
-                created_at = excluded.created_at
+            INSERT INTO transactions
+                (id, session_id, direction, label, amount, day, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                direction = excluded.direction,
+                label = excluded.label,
+                amount = excluded.amount,
+                day = excluded.day
             """,
-            (session_id, version, json.dumps(payload), _now()),
+            (
+                item["id"],
+                session_id,
+                item["direction"],
+                item["label"],
+                int(item["amount"]),
+                item.get("day"),
+                _now(),
+            ),
         )
 
-    def latest_snapshot(self, session_id: str) -> dict[str, Any] | None:
+    def remove_transaction(self, *, session_id: str, item_id: str) -> None:
+        self._execute(
+            "DELETE FROM transactions WHERE session_id = ? AND id = ?",
+            (session_id, item_id),
+        )
+
+    def list_transactions(self, session_id: str) -> list[dict[str, Any]]:
         rows = self._query(
             """
-            SELECT payload FROM snapshots
+            SELECT id, direction, label, amount, day, created_at
+              FROM transactions
              WHERE session_id = ?
-             ORDER BY version DESC
-             LIMIT 1
+             ORDER BY created_at
             """,
             (session_id,),
         )
-        if not rows:
-            return None
-        return json.loads(rows[0]["payload"])
-
-    def latest_snapshot_for_user(self, user_id: str) -> dict[str, Any] | None:
-        rows = self._query(
-            """
-            SELECT s.payload FROM snapshots s
-              JOIN sessions x ON x.session_id = s.session_id
-             WHERE x.user_id = ?
-             ORDER BY x.created_at DESC, s.version DESC
-             LIMIT 1
-            """,
-            (user_id,),
-        )
-        if not rows:
-            return None
-        return json.loads(rows[0]["payload"])
+        return [
+            {
+                "id": row["id"],
+                "direction": row["direction"],
+                "label": row["label"],
+                "amount": row["amount"],
+                "day": row["day"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
 
     # --- transcript ---------------------------------------------------------
 
@@ -337,7 +368,7 @@ class Store:
         return {
             "session": meta,
             "transcript": self.list_transcript(session_id),
-            "finance": self.latest_snapshot(session_id),
+            "transactions": self.list_transactions(session_id),
         }
 
 
@@ -366,24 +397,28 @@ async def set_session_status(**kwargs: Any) -> None:
     await _safely(store.set_session_status, **kwargs)
 
 
+async def set_session_name(**kwargs: Any) -> None:
+    await _safely(store.set_session_name, **kwargs)
+
+
 async def end_session(**kwargs: Any) -> None:
     await _safely(store.end_session, **kwargs)
 
 
-async def save_snapshot(**kwargs: Any) -> None:
-    await _safely(store.save_snapshot, **kwargs)
+async def add_transaction(**kwargs: Any) -> None:
+    await _safely(store.add_transaction, **kwargs)
+
+
+async def remove_transaction(**kwargs: Any) -> None:
+    await _safely(store.remove_transaction, **kwargs)
 
 
 async def append_turn(**kwargs: Any) -> None:
     await _safely(store.append_turn, **kwargs)
 
 
-async def latest_snapshot(session_id: str) -> dict[str, Any] | None:
-    return await asyncio.to_thread(store.latest_snapshot, session_id)
-
-
-async def latest_snapshot_for_user(user_id: str) -> dict[str, Any] | None:
-    return await asyncio.to_thread(store.latest_snapshot_for_user, user_id)
+async def list_transactions(session_id: str) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(store.list_transactions, session_id)
 
 
 async def get_session(session_id: str) -> dict[str, Any] | None:

@@ -27,7 +27,7 @@ export function WelcomeScreen({
           priority
         />
         <h1 className={styles.title}>Kubera</h1>
-        <p className={styles.lede}>I&rsquo;ll help you with your finances.</p>
+        <p className={styles.lede}>I&rsquo;ll collect your money details.</p>
 
         <button
           type="button"

@@ -2,18 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/atoms";
-import { PlanView } from "@/components/plan/PlanView";
+import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
 import {
   getSessionHistory,
   listSessions,
   type SessionHistory,
   type SessionListItem,
 } from "@/lib/agent-api";
-import {
-  acceptSnapshot,
-  EMPTY_SNAPSHOT,
-  type FinanceSnapshot,
-} from "@/lib/finance";
+import type { MoneyItem } from "@/lib/transactions";
 import { AppFrame } from "./AppFrame";
 import styles from "./shells.module.css";
 
@@ -40,9 +36,19 @@ function formatDuration(total: number | null): string {
   return `${m}m ${String(s).padStart(2, "0")}s`;
 }
 
-function toFinance(raw: SessionHistory["finance"]): FinanceSnapshot {
-  if (!raw) return EMPTY_SNAPSHOT;
-  return acceptSnapshot(EMPTY_SNAPSHOT, raw);
+function toItems(raw: SessionHistory["transactions"]): MoneyItem[] {
+  return raw
+    .filter(
+      (row): row is SessionHistory["transactions"][number] & { day: number } =>
+        typeof row.day === "number" && row.day >= 1 && row.day <= 31,
+    )
+    .map((row) => ({
+      id: row.id,
+      direction: row.direction,
+      label: row.label,
+      amount: row.amount,
+      day: row.day,
+    }));
 }
 
 export function HistoryShell({ onBack }: HistoryShellProps) {
@@ -83,18 +89,20 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
   }
 
   if (detail) {
-    const finance = toFinance(detail.finance);
+    const items = toItems(detail.transactions);
     const turns = detail.transcript;
     const title = detail.session.name?.trim() || "Past call";
     const duration = formatDuration(detail.session.duration_seconds);
+    const hasMoney = items.length > 0;
+    const hasTurns = turns.length > 0;
 
     return (
       <AppFrame>
-        <div className={styles.historyPage}>
-          <div className={styles.historyBar}>
+        <div className={styles.callReview}>
+          <div className={styles.callReviewBar}>
             <div>
-              <h1 className={styles.historyTitle}>{title}</h1>
-              <p className={styles.historyMeta}>
+              <h1 className={styles.callReviewTitle}>{title}</h1>
+              <p className={styles.callReviewMeta}>
                 {formatWhen(detail.session.created_at)}
                 {duration ? ` · ${duration}` : ""}
               </p>
@@ -104,14 +112,25 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
             </Button>
           </div>
 
-          {finance.plan || finance.facts.length > 0 ? (
+          {hasMoney ? (
             <div className={styles.planScroll}>
-              <PlanView snapshot={finance} />
+              <MoneyCalendar state={{ items }} />
             </div>
-          ) : null}
+          ) : (
+            <div className={styles.reviewEmpty}>
+              <p className={styles.reviewEmptyTitle}>
+                {hasTurns ? "No money recorded" : "Nothing saved"}
+              </p>
+              <p className={styles.reviewEmptyCopy}>
+                {hasTurns
+                  ? "This call has a transcript, but no income or expenses were logged."
+                  : "This call ended before anything was recorded."}
+              </p>
+            </div>
+          )}
 
-          {turns.length > 0 ? (
-            <div className={styles.recap}>
+          {hasTurns ? (
+            <div className={styles.recapCompact}>
               {turns.map((turn) => (
                 <p key={turn.seq} className={styles.recapLine}>
                   <span className={styles.recapSpeaker}>
@@ -122,9 +141,11 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
                 </p>
               ))}
             </div>
-          ) : (
-            <p className={styles.historyEmpty}>No transcript saved for this call.</p>
-          )}
+          ) : hasMoney ? (
+            <div className={styles.recapCompact}>
+              <p className={styles.recapIdle}>No transcript for this call.</p>
+            </div>
+          ) : null}
         </div>
       </AppFrame>
     );
@@ -136,7 +157,9 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
         <div className={styles.historyBar}>
           <div>
             <h1 className={styles.historyTitle}>Past calls</h1>
-            <p className={styles.historyMeta}>Transcripts and plans from earlier sessions.</p>
+            <p className={styles.historyMeta}>
+              Transcripts and money from earlier sessions.
+            </p>
           </div>
           <Button variant="secondary" onClick={onBack}>
             Back
@@ -150,9 +173,16 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
         ) : null}
 
         {rows == null ? (
-          <p className={styles.historyEmpty}>Loading…</p>
+          <div className={styles.reviewEmpty}>
+            <p className={styles.reviewEmptyCopy}>Loading…</p>
+          </div>
         ) : rows.length === 0 ? (
-          <p className={styles.historyEmpty}>No saved calls yet. Talk to Kubera once.</p>
+          <div className={styles.reviewEmpty}>
+            <p className={styles.reviewEmptyTitle}>No saved calls yet</p>
+            <p className={styles.reviewEmptyCopy}>
+              Talk to Kubera once and your sessions will show up here.
+            </p>
+          </div>
         ) : (
           <ul className={styles.historyList}>
             {rows.map((row) => {
@@ -170,7 +200,7 @@ export function HistoryShell({ onBack }: HistoryShellProps) {
                     <span className={styles.historyRowMeta}>
                       {formatWhen(row.created_at)}
                       {duration ? ` · ${duration}` : ""}
-                      {row.has_plan ? " · plan" : ""}
+                      {row.tx_count > 0 ? ` · ${row.tx_count} items` : ""}
                     </span>
                   </button>
                 </li>

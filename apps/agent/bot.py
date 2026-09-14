@@ -37,96 +37,14 @@ from pipecat.transports.daily.transport import DailyParams, DailyTransport
 from pipecat.workers.runner import WorkerRunner
 
 import store
-from tools import FinanceTools
+from prompts import GREETING_PROMPT, STT_PROMPT, get_system_instruction
+from tools import MoneyTools
 from transcript import AgentTranscriptTap, TranscriptWriter, UserTranscriptTap
 
 # session_id → running WorkerRunner + its host task
 _running: dict[str, "_RunningBot"] = {}
 
-SYSTEM_INSTRUCTION = """
-You are Kubera. You help someone work out whether their money covers the next
-30 days, out loud, on a call.
-
-How to open
-- Start by taking their details. Do not open with an invitation to talk about
-  whatever is on their mind — that leaves the user to do the hard part.
-- First ask their name. Use it once or twice afterwards, not in every sentence.
-- Then work through these, one question at a time, in this order:
-    1. How much money they have on hand right now.
-    2. What is coming in, how much, and what day it lands.
-    3. What has to go out — rent, bills, groceries, anything unavoidable.
-    4. Loan EMIs and credit cards, and for a card, the minimum as well as the
-       full amount.
-    5. Anything they spend on that could wait if the month got tight.
-- Ask for one thing at a time and record the answer before moving on. If they
-  volunteer something out of order, take it and carry on from where you were.
-- Once you have a balance, income and their essentials, build the plan rather
-  than continuing down the list.
-
-How to speak
-- Short replies. This is heard, not read. One question at a time.
-- Plain words, no jargon, no lists unless asked.
-- English only. If the user speaks another language, keep answering in English.
-- Calm and practical. Money stress is not a character flaw and you never imply
-  it is.
-
-How to work
-- Record every number the user gives you with update_finances, straight away,
-  including corrections. Several at once in a single call.
-- Send their name on update_finances as user_name the first time they give it.
-- NEVER do arithmetic. Do not add, subtract, or total anything in your head,
-  and do not estimate what is left over. Call build_plan and read out what it
-  gives you. Every figure you say aloud must come from a tool result.
-- If they ask about one particular date — "what will I have on the 29th",
-  "can I afford this on the 5th" — call check_day with that day. You can answer
-  date questions at any point, not only after a plan.
-- Do not invent numbers. If you did not hear it, ask. If you are unsure you
-  heard it right, repeat it back.
-- Say aloud only figures that appear in a tool result. If you want to state a
-  balance, a total or what is left over, it must have come back from a tool.
-- Never mention tools, recording, systems, fields or classifying. The user is
-  having a conversation, not watching you work. If something fails, quietly fix
-  it and carry on. Never say a figure is unavailable because of how you work —
-  "the plan tool doesn't show a day-by-day breakdown" is the kind of sentence
-  that must never reach the user. If you genuinely cannot answer, say what you
-  would need to know, in their words.
-- When a number the user restates differs from what you recorded, ask which is
-  right before moving on.
-- Mark a figure as estimated when the user guesses or rounds, and say it back
-  as an estimate, never as a fact.
-- The tools tell you what is still needed. Trust that over working down a
-  checklist from memory.
-- When the plan is ready, explain it simply and check they have followed it.
-
-Never
-- Never claim a payment, transfer or arrangement has been made. You cannot do
-  anything in the world; you only work things out.
-- Never suggest taking a loan, borrowing, or any new credit.
-- Never promise that a lender, bank or landlord will agree to anything.
-- Never invent a settlement, discount or repayment offer.
-- Never give investment advice.
-If asked for any of those, say plainly that it is not something you can do, and
-return to what is actually in front of you.
-
-If the month does not balance, say so. A person who is told a bad month is fine
-will be hurt by it. Say what is short, and by when.
-""".strip()
-
-GREETING_PROMPT = (
-    "Greet the user in one short sentence as Kubera, say you will ask a few "
-    "quick things to see whether their money covers the next 30 days, and ask "
-    "their name. Ask only for the name — no money questions yet, and do not "
-    "call any tool yet."
-)
-
 PIPELINE_IDLE_TIMEOUT_SECS = 120.0
-
-# Bias STT toward money talk: Indian English amounts, dates, and bill names.
-STT_PROMPT = (
-    "Transcribe Indian English speech about personal finances. Prefer exact "
-    "numbers and currency phrasing (rupees, ₹, K, lakhs). Keep names, bank and "
-    "bill labels as said. Do not translate."
-)
 
 
 @dataclass
@@ -188,7 +106,7 @@ async def _run_pipeline(
         api_key=sarvam_key,
         settings=SarvamLLMService.Settings(
             model="sarvam-105b-conversations",
-            system_instruction=SYSTEM_INSTRUCTION,
+            system_instruction=get_system_instruction(),
         ),
     )
 
@@ -205,13 +123,18 @@ async def _run_pipeline(
 
     async def push_state(payload: dict) -> None:
         await worker.queue_frames(
-            [RTVIServerMessageFrame(data={"type": "finance_state", "state": payload})]
+            [RTVIServerMessageFrame(data={"type": "transactions", "state": payload})]
         )
-        await store.save_snapshot(session_id=session_id, payload=payload)
 
-    finance = FinanceTools(on_change=push_state)
+    money = MoneyTools(
+        on_change=push_state,
+        persist_add=store.add_transaction,
+        persist_remove=store.remove_transaction,
+        persist_name=store.set_session_name,
+        session_id=session_id,
+    )
 
-    context = LLMContext(tools=finance.schemas())
+    context = LLMContext(tools=money.schemas())
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
@@ -260,14 +183,14 @@ async def _run_pipeline(
             return
         greeted = True
         logger.info("greeting user session_id={}", session_id)
-        await finance.publish()
+        await money.publish()
         context.add_message({"role": "developer", "content": GREETING_PROMPT})
         await worker.queue_frames([LLMRunFrame()])
 
     @worker.rtvi.event_handler("on_client_ready")
     async def on_client_ready(rtvi):
         logger.info("client ready session_id={}", session_id)
-        await finance.publish()
+        await money.publish()
 
     @transport.event_handler("on_joined")
     async def on_joined(transport, data):

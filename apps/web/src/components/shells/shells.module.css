@@ -200,7 +200,7 @@
 
 .captionsCompact .captionsStack {
   gap: 12px;
-  padding: 36px 24px 16px;
+  padding: 20px 28px 16px;
 }
 
 .captionLine {
@@ -505,12 +505,23 @@
 .errorBanner {
   margin: 10px 0 0;
   max-width: 42ch;
-  padding: 9px 13px;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border-radius: 8px;
   background: var(--danger-tint);
   color: var(--danger);
   font-size: 12.5px;
   line-height: 1.45;
+}
+
+.callReview > .errorBanner,
+.historyPage > .errorBanner {
+  margin: 12px 28px 0;
+  max-width: none;
+  align-self: stretch;
+}
+
+.historyPage > .errorBanner {
+  margin: 0;
 }
 
 /* --- ended: transcript recap --------------------------------------------- */
@@ -522,19 +533,42 @@
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 13px 15px;
+  gap: 10px;
+  padding: 16px 18px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--surface);
   text-align: left;
+}
+
+/* Same strip as live captions under the calendar. */
+.recapCompact {
+  flex: none;
+  height: min(28vh, 220px);
+  border-top: 1px solid var(--hairline);
+  background: var(--surface);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 28px 20px;
+  text-align: left;
+}
+
+.recapIdle {
+  margin: auto 0;
+  font-size: 13px;
+  color: var(--ink-faint);
+  text-align: center;
 }
 
 .recapLine {
   margin: 0;
   display: grid;
   grid-template-columns: 3.2rem minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   align-items: baseline;
   font-size: 13px;
   line-height: 1.5;
@@ -550,7 +584,74 @@
   color: var(--ink-ghost);
 }
 
-/* --- ended, with a plan to keep ------------------------------------------ */
+/* --- ended / history detail: calendar + transcript strip ----------------- */
+
+.callReview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
+
+.callReviewBar {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.callReviewTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.016em;
+  color: var(--ink);
+}
+
+.callReviewMeta {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.reviewEmpty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 28px;
+  text-align: center;
+  background: var(--canvas);
+}
+
+.reviewEmptyTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.014em;
+  color: var(--ink-soft);
+}
+
+.reviewEmptyCopy {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
 
 .endedPlan {
   flex: 1;
@@ -566,26 +667,35 @@
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
-  padding: 18px 28px 0;
+  padding: 20px 28px 0;
 }
 
 .endedTitle {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 19px;
+  font-size: 22px;
   font-weight: 400;
-  letter-spacing: -0.014em;
+  letter-spacing: -0.016em;
 }
 
 .endedMeta {
-  margin: 3px 0 0;
-  font-size: 12.5px;
+  margin: 6px 0 0;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
 @media (max-width: 44rem) {
-  .endedBar {
-    padding: 14px 16px 0;
+  .endedBar,
+  .callReviewBar {
+    padding: 16px;
+  }
+
+  .recapCompact {
+    padding: 14px 16px 16px;
+  }
+
+  .reviewEmpty {
+    padding: 32px 16px;
   }
 }
 
@@ -595,7 +705,7 @@
   }
 
   .captionsCompact .captionsStack {
-    padding: 32px 16px 14px;
+    padding: 16px 16px 14px;
   }
 
   .recapLine {
@@ -613,8 +723,9 @@
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 18px 28px 32px;
-  gap: 16px;
+  padding: 24px 28px 36px;
+  gap: 20px;
+  background: var(--canvas);
 }
 
 .historyBar {
@@ -631,16 +742,18 @@
   font-size: 22px;
   font-weight: 400;
   letter-spacing: -0.016em;
+  color: var(--ink);
 }
 
 .historyMeta {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   font-size: 13px;
+  line-height: 1.4;
   color: var(--ink-muted);
 }
 
 .historyEmpty {
-  margin: 24px 0 0;
+  margin: 0;
   font-size: 14px;
   color: var(--ink-muted);
 }
@@ -651,7 +764,12 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
 }
 
 .historyRow {
@@ -660,17 +778,21 @@
   font: inherit;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 14px 4px;
+  gap: 4px;
+  padding: 16px 18px;
   border: none;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--hairline);
   background: transparent;
   color: inherit;
   cursor: pointer;
 }
 
+.historyRow:last-child {
+  border-bottom: none;
+}
+
 .historyRow:hover:not(:disabled) {
-  color: var(--accent);
+  background: var(--surface-sunk);
 }
 
 .historyRow:disabled {
@@ -681,6 +803,7 @@
 .historyRowTitle {
   font-size: 15px;
   font-weight: 500;
+  color: var(--ink);
 }
 
 .historyRowMeta {
@@ -690,6 +813,10 @@
 
 @media (max-width: 44rem) {
   .historyPage {
-    padding: 14px 16px 28px;
+    padding: 16px 16px 28px;
+  }
+
+  .historyRow {
+    padding: 14px 14px;
   }
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/atoms";
-import { PlanView } from "@/components/plan/PlanView";
-import { EMPTY_SNAPSHOT, type FinanceSnapshot } from "@/lib/finance";
+import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
+import {
+  EMPTY_TRANSACTIONS,
+  type TransactionsState,
+} from "@/lib/transactions";
 import { turnText, type Transcript } from "@/lib/transcript";
 import { AppFrame } from "./AppFrame";
 import styles from "./shells.module.css";
@@ -12,7 +14,7 @@ import styles from "./shells.module.css";
 type EndedShellProps = {
   durationSeconds: number;
   transcript?: Transcript;
-  finance?: FinanceSnapshot;
+  transactions?: TransactionsState;
   reason?: "user" | "agent" | "dropped";
   onRestart: () => void;
   error?: string | null;
@@ -35,46 +37,34 @@ function headline(reason: EndedShellProps["reason"], error?: string | null) {
 export function EndedShell({
   durationSeconds,
   transcript = [],
-  finance = EMPTY_SNAPSHOT,
+  transactions = EMPTY_TRANSACTIONS,
   reason = "user",
   onRestart,
   error,
 }: EndedShellProps) {
-  const [showTranscript, setShowTranscript] = useState(false);
   const lines = transcript.filter((turn) => turnText(turn) !== "");
   const dropped = Boolean(error) || reason === "dropped";
-  const hasPlan = finance.plan != null;
+  const hasMoney = transactions.items.length > 0;
+  const hasTurns = lines.length > 0;
 
-  // The plan is the point of the call, so hanging up must not throw it away.
-  // It stays exactly where it was being read, full width, and the sign-off
-  // becomes a line above it rather than a screen of its own.
-  if (hasPlan) {
+  if (hasMoney) {
     return (
       <AppFrame>
-        <div className={styles.endedPlan}>
-          <div className={styles.endedBar}>
+        <div className={styles.callReview}>
+          <div className={styles.callReviewBar}>
             <div>
-              <h1 className={styles.endedTitle}>{headline(reason, error)}</h1>
-              <p className={styles.endedMeta}>
+              <h1 className={styles.callReviewTitle}>
+                {headline(reason, error)}
+              </h1>
+              <p className={styles.callReviewMeta}>
                 {durationSeconds > 0
                   ? `You talked for ${formatDuration(durationSeconds)}. This is yours to keep.`
                   : "This is yours to keep."}
               </p>
             </div>
-            <div className={styles.actions}>
-              {lines.length > 0 ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowTranscript((v) => !v)}
-                  aria-expanded={showTranscript}
-                >
-                  {showTranscript ? "Hide transcript" : "Read transcript"}
-                </Button>
-              ) : null}
-              <Button variant="primary" onClick={onRestart}>
-                {dropped ? "Try again" : "Start again"}
-              </Button>
-            </div>
+            <Button variant="primary" onClick={onRestart}>
+              {dropped ? "Try again" : "Start again"}
+            </Button>
           </div>
 
           {dropped && error ? (
@@ -83,20 +73,24 @@ export function EndedShell({
             </p>
           ) : null}
 
-          <PlanView snapshot={finance} />
+          <div className={styles.planScroll}>
+            <MoneyCalendar state={transactions} />
+          </div>
 
-          {showTranscript && lines.length > 0 ? (
-            <div className={styles.recap}>
-              {lines.map((turn) => (
+          <div className={styles.recapCompact}>
+            {hasTurns ? (
+              lines.map((turn) => (
                 <p key={turn.id} className={styles.recapLine}>
                   <span className={styles.recapSpeaker}>
                     {turn.role === "agent" ? "Kubera" : "You"}
                   </span>
                   <span>{turnText(turn)}</span>
                 </p>
-              ))}
-            </div>
-          ) : null}
+              ))
+            ) : (
+              <p className={styles.recapIdle}>No transcript for this call.</p>
+            )}
+          </div>
         </div>
       </AppFrame>
     );
@@ -130,18 +124,9 @@ export function EndedShell({
           <Button variant="primary" onClick={onRestart}>
             {dropped ? "Try again" : "Start again"}
           </Button>
-          {lines.length > 0 ? (
-            <Button
-              variant="secondary"
-              onClick={() => setShowTranscript((v) => !v)}
-              aria-expanded={showTranscript}
-            >
-              {showTranscript ? "Hide transcript" : "Read transcript"}
-            </Button>
-          ) : null}
         </div>
 
-        {showTranscript && lines.length > 0 ? (
+        {hasTurns ? (
           <div className={styles.recap}>
             {lines.map((turn) => (
               <p key={turn.id} className={styles.recapLine}>

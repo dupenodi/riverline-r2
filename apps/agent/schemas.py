@@ -59,7 +59,7 @@ class SessionListItem(BaseModel):
     duration_seconds: int | None = None
     ended_reason: str | None = None
     name: str | None = None
-    has_plan: bool = False
+    tx_count: int = 0
 
 
 class TranscriptTurn(BaseModel):
@@ -70,6 +70,15 @@ class TranscriptTurn(BaseModel):
     created_at: str
 
 
+class MoneyItem(BaseModel):
+    id: str
+    direction: Literal["incoming", "outgoing"]
+    label: str
+    amount: int
+    day: int | None = None
+    created_at: str | None = None
+
+
 class TranscriptResponse(BaseModel):
     session_id: str
     turns: list[TranscriptTurn]
@@ -78,7 +87,7 @@ class TranscriptResponse(BaseModel):
 class SessionHistoryResponse(BaseModel):
     session: SessionListItem
     transcript: list[TranscriptTurn]
-    finance: dict | None = None
+    transactions: list[MoneyItem]
 
 
 class ErrorBody(BaseModel):
@@ -96,7 +105,7 @@ ErrorCode = Literal[
     "room_create_failed",
     "bot_start_failed",
     "session_not_found",
-    "no_finance_state",
+    "no_transactions",
 ]
 
 

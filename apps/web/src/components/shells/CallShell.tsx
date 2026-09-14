@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Image from "next/image";
 import { CallTimer } from "@/components/atoms";
-import { PlanView } from "@/components/plan/PlanView";
+import { MoneyCalendar } from "@/components/transactions/MoneyCalendar";
 import type { LevelMeter } from "@/lib/audio-level";
 import {
   callMood,
@@ -11,7 +11,7 @@ import {
   moodMascot,
   moodPulses,
 } from "@/lib/call-mood";
-import type { FinanceSnapshot } from "@/lib/finance";
+import type { TransactionsState } from "@/lib/transactions";
 import { isEmpty, type Transcript } from "@/lib/transcript";
 import { AppFrame } from "./AppFrame";
 import { CaptionStream } from "./CaptionStream";
@@ -24,7 +24,7 @@ type CallShellProps = {
   userSpeaking: boolean;
   thinking: boolean;
   transcript: Transcript;
-  finance: FinanceSnapshot;
+  transactions: TransactionsState;
   micMeter?: LevelMeter | null;
   connectionLabel?: string;
   notice?: string | null;
@@ -40,7 +40,7 @@ export function CallShell({
   userSpeaking,
   thinking,
   transcript,
-  finance,
+  transactions,
   micMeter: _micMeter = null,
   connectionLabel = "Connected",
   notice = null,
@@ -48,7 +48,7 @@ export function CallShell({
   onEnd,
   ending = false,
 }: CallShellProps) {
-  const planned = finance.plan != null;
+  const hasMoney = transactions.items.length > 0;
   const hasLines = transcript.some((turn) => !isEmpty(turn));
   const youSpeaking = userSpeaking && !muted && !ending;
   const mood = callMood({
@@ -83,9 +83,9 @@ export function CallShell({
 
   return (
     <AppFrame>
-      {planned ? (
+      {hasMoney ? (
         <div className={styles.planScroll}>
-          <PlanView snapshot={finance} />
+          <MoneyCalendar state={transactions} />
         </div>
       ) : (
         <div className={styles.talkStage}>
@@ -116,7 +116,7 @@ export function CallShell({
         </div>
       )}
 
-      {planned ? (
+      {hasMoney ? (
         <CaptionStream
           transcript={transcript}
           compact

@@ -21,6 +21,7 @@ import store as db
 from schemas import (
     ClientCredentials,
     CreateSessionRequest,
+    MoneyItem,
     RoomInfo,
     SessionCreatedResponse,
     SessionHistoryResponse,
@@ -87,8 +88,27 @@ def _list_item(row: dict[str, Any]) -> SessionListItem:
         duration_seconds=row.get("duration_seconds"),
         ended_reason=row.get("ended_reason"),
         name=row.get("name"),
-        has_plan=bool(row.get("has_plan")),
+        tx_count=int(row.get("tx_count") or 0),
     )
+
+
+def _money_items(rows: list[dict[str, Any]]) -> list[MoneyItem]:
+    out: list[MoneyItem] = []
+    for row in rows:
+        direction = row.get("direction")
+        if direction not in ("incoming", "outgoing"):
+            continue
+        out.append(
+            MoneyItem(
+                id=row["id"],
+                direction=direction,
+                label=row["label"],
+                amount=int(row["amount"]),
+                day=row.get("day"),
+                created_at=row.get("created_at"),
+            )
+        )
+    return out
 
 
 def _turns(rows: list[dict[str, Any]]) -> list[TranscriptTurn]:
@@ -286,35 +306,38 @@ async def get_history(session_id: str) -> SessionHistoryResponse | JSONResponse:
             content=error_payload("session_not_found", f"Unknown session {session_id}"),
         )
     meta = history["session"]
-    snap = history["finance"]
-    item = _list_item(
-        {
-            **meta,
-            "name": snap.get("name") if snap else None,
-            "has_plan": bool(snap and snap.get("plan")),
-        }
-    )
+    txs = history["transactions"]
+    item = _list_item({**meta, "tx_count": len(txs)})
     return SessionHistoryResponse(
         session=item,
         transcript=_turns(history["transcript"]),
-        finance=snap,
+        transactions=_money_items(txs),
     )
 
 
 @app.get(
-    "/sessions/{session_id}/finance",
+    "/sessions/{session_id}/transactions",
     responses={404: {"description": "Nothing recorded for this session"}},
 )
-async def get_finance(session_id: str) -> JSONResponse:
-    payload = await db.latest_snapshot(session_id)
-    if payload is None:
+async def get_transactions(session_id: str) -> JSONResponse:
+    session = await db.get_session(session_id)
+    if session is None:
+        return JSONResponse(
+            status_code=404,
+            content=error_payload("session_not_found", f"Unknown session {session_id}"),
+        )
+    txs = await db.list_transactions(session_id)
+    if not txs:
         return JSONResponse(
             status_code=404,
             content=error_payload(
-                "no_finance_state", f"No financial state recorded for {session_id}"
+                "no_transactions", f"No transactions recorded for {session_id}"
             ),
         )
-    return JSONResponse(status_code=200, content=payload)
+    return JSONResponse(
+        status_code=200,
+        content={"session_id": session_id, "transactions": txs},
+    )
 
 
 @app.delete(
