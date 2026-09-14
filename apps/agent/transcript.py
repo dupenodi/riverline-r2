@@ -56,8 +56,7 @@ class UserTranscriptTap(FrameProcessor):
             return
 
         if isinstance(frame, TranscriptionFrame):
-            # Interim is a different class. Treat TranscriptionFrame as settled
-            # even when `finalized` is left at its default False.
+            # Settled even when `finalized` is still False (default).
             await self._writer.add("user", frame.text or "")
 
         await self.push_frame(frame, direction)

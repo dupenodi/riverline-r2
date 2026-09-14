@@ -39,6 +39,9 @@ export function MoneyRail({ state }: MoneyRailProps) {
   const groups = KIND_LABEL;
   const byKind = (kind: FinanceKind) =>
     state.entries.filter((entry) => entry.kind === kind);
+  const overdueById = new Map(
+    (state.derived?.overdue ?? []).map((row) => [row.id, row.date]),
+  );
   const advice = state.advice;
   const hasAdvice =
     (advice?.points.length ?? 0) > 0 || advice?.payoff != null;
@@ -94,8 +97,7 @@ export function MoneyRail({ state }: MoneyRailProps) {
               <p key={entry.id} className={styles.row}>
                 <span>
                   {entry.label}
-                  {entry.status === "paid" ? " · paid" : ""}
-                  {when(entry)}
+                  {when(entry, overdueById.get(entry.id))}
                 </span>
                 <span data-num>{entryAmount(entry)}</span>
               </p>
@@ -158,12 +160,14 @@ export function MoneyRail({ state }: MoneyRailProps) {
   );
 }
 
-function when(entry: FinanceEntry): string {
-  if (entry.cadence === "daily") return " · every day";
-  if (entry.cadence === "weekly") return " · weekly";
-  if (entry.on_date) return ` · ${formatDay(entry.on_date)}`;
-  if (entry.day != null) return ` · ${entry.day}`;
-  return "";
+function when(entry: FinanceEntry, overdueDate?: string): string {
+  const paid = entry.status === "paid" ? " · paid" : "";
+  if (overdueDate) return `${paid} · overdue · ${formatDay(overdueDate)}`;
+  if (entry.cadence === "daily") return `${paid} · every day`;
+  if (entry.cadence === "weekly") return `${paid} · weekly`;
+  if (entry.on_date) return `${paid} · ${formatDay(entry.on_date)}`;
+  if (entry.day != null) return `${paid} · ${entry.day}`;
+  return paid;
 }
 
 function signed(amount: number): string {

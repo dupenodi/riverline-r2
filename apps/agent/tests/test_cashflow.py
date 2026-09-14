@@ -135,7 +135,7 @@ def test_card_drops_to_minimum() -> None:
     card = _e(
         "c",
         "debt",
-        "HDFC card",
+        "HDFC",
         amount=20_000,
         day=5,
         min_due=2_000,
@@ -145,6 +145,13 @@ def test_card_drops_to_minimum() -> None:
     assert any(s.action == "pay_minimum" and s.amount == 2_000 for s in plan.steps)
     full = project(TODAY, 3_000, [card])
     assert full.crunch.amount < 0
+
+
+def test_card_in_label_without_min_due_cannot_pay_minimum() -> None:
+    bill = _e("c", "debt", "Credit card", amount=20_000, day=5)
+    plan = build_plan(TODAY, 3_000, [bill])
+    assert plan.solvable is False
+    assert all(s.action != "pay_minimum" for s in plan.steps)
 
 
 def test_unsolvable_reports_gap_and_date() -> None:
@@ -197,11 +204,16 @@ def test_mid_month_unknown_does_not_guess_this_cycle() -> None:
     assert "Rent" in missing(50_000, [rent], today)
 
 
-def test_mid_month_unpaid_lands_today_and_next_month() -> None:
+def test_mid_month_unpaid_keeps_original_date_and_next_month() -> None:
     today = date(2026, 9, 13)
     rent = _e("r", "need", "Rent", amount=10_000, day=5, status="due")
     proj = project(today, 50_000, [rent])
-    assert _hits(proj, "Rent") == [date(2026, 9, 13), date(2026, 10, 5)]
+    assert _hits(proj, "Rent") == [date(2026, 10, 5)]
+    assert [(hit.date, hit.move.label) for hit in proj.overdue] == [
+        (date(2026, 9, 5), "Rent")
+    ]
+    assert all(m.label != "Rent" for m in proj.days[0].outflows)
+    assert proj.days[0].closing == 40_000
     assert proj.finish == 30_000
 
 
@@ -322,3 +334,41 @@ def test_range_beats_point_amount_for_a_bill() -> None:
         day=17,
     )
     assert planning_amount(bill) == 6_000
+
+
+def test_overdue_on_date_stays_on_original_day() -> None:
+    today = date(2026, 9, 14)
+    bill = _e(
+        "a",
+        "need",
+        "Airtel",
+        amount=700,
+        cadence="once",
+        on_date="2026-09-10",
+        day=10,
+        status="due",
+    )
+    proj = project(today, 15_000, [bill])
+    assert _hits(proj, "Airtel") == []
+    assert proj.overdue[0].date == date(2026, 9, 10)
+    assert proj.days[0].closing == 14_300
+    assert proj.finish == 14_300
+
+
+def test_overdue_inflow_does_not_enter_cash() -> None:
+    today = date(2026, 9, 14)
+    friend = _e(
+        "k",
+        "owed",
+        "Karthik",
+        amount=5_000,
+        cadence="once",
+        on_date="2026-09-10",
+        day=10,
+        status="due",
+    )
+    proj = project(today, 10_000, [friend])
+    assert _hits(proj, "Karthik") == []
+    assert proj.overdue[0].date == date(2026, 9, 10)
+    assert proj.finish == 10_000
+    assert proj.days[0].closing == 10_000

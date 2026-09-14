@@ -85,12 +85,7 @@ export async function getSession(
   return data as SessionStatusPayload;
 }
 
-/**
- * Fire-and-forget session teardown for page unload.
- *
- * `keepalive` lets the request outlive the document, which `sendBeacon` cannot
- * do here because the agent expects DELETE.
- */
+/** DELETE on unload (`keepalive`; sendBeacon can't DELETE). */
 export function endSessionBeacon(sessionId: string): void {
   try {
     void fetch(`${AGENT_URL}/sessions/${sessionId}`, {
@@ -98,7 +93,7 @@ export function endSessionBeacon(sessionId: string): void {
       keepalive: true,
     });
   } catch {
-    /* the page is going away regardless */
+    /* ignore */
   }
 }
 
@@ -166,13 +161,19 @@ export interface SessionHistory {
         kind: string;
       }>;
     }>;
+    overdue?: Array<{
+      id: string;
+      label: string;
+      amount: number;
+      kind: string;
+      date: string;
+    }>;
   } | null;
   cash?: number | null;
   entries?: Array<Record<string, unknown>>;
   missing?: string[];
   plan?: {
     solvable: boolean;
-    steps: Array<{ action: string; label: string; amount: number }>;
     gap: number | null;
     gap_date: string | null;
   } | null;

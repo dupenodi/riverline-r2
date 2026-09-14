@@ -371,7 +371,7 @@ async def get_transactions(session_id: str) -> JSONResponse:
 async def end_session(session_id: str) -> Response:
     session = store.get(session_id)
     if session is None:
-        # Still mark durable row ended if it exists (idempotent hang-up).
+        # Idempotent hang-up if the durable row still exists.
         row = await db.get_session(session_id)
         if row is None:
             return JSONResponse(

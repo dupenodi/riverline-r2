@@ -10,21 +10,13 @@ import styles from "./shells.module.css";
 
 type CaptionStreamProps = {
   transcript: Transcript;
-  /** Shorter strip under the plan once the calendar owns the room. */
   compact?: boolean;
-  /** Shown when there is nothing to caption yet. Omit when mood lives above. */
   idle?: string;
   agentSpeaking?: boolean;
   userSpeaking?: boolean;
 };
 
-/**
- * Live captions for the call: both speakers, newest at the bottom, older
- * lines scroll up under a fade. No scrollbar — the eye follows the voice.
- *
- * Text split (spoken vs still in flight) comes from `turnCaption`; this
- * component only lays that out.
- */
+/** Live captions; spoken vs pending from `turnCaption`. */
 export function CaptionStream({
   transcript,
   compact = false,

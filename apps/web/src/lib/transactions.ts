@@ -27,10 +27,19 @@ export type DerivedDay = {
   moves: DerivedMove[];
 };
 
+export type DerivedOverdue = {
+  id: string;
+  label: string;
+  amount: number;
+  kind: string;
+  date: string;
+};
+
 export type DerivedState = {
   finish: number;
   crunch: { date: string; amount: number };
   days: DerivedDay[];
+  overdue?: DerivedOverdue[];
 };
 
 export type FinanceKind = "income" | "need" | "debt" | "flex" | "owed";
@@ -48,15 +57,6 @@ export type FinanceEntry = {
   on_date?: string | null;
 };
 
-export type PlanStep = {
-  action: string;
-  label: string;
-  amount: number;
-  date?: string | null;
-  until?: string | null;
-  note?: string | null;
-};
-
 export type AdvicePayoff = {
   lowest: number;
   date: string;
@@ -71,7 +71,6 @@ export type AdviceState = {
 
 export type PlanState = {
   solvable: boolean;
-  steps: PlanStep[];
   gap: number | null;
   gap_date: string | null;
 };
@@ -142,6 +141,18 @@ function isDerivedDay(value: unknown): value is DerivedDay {
   );
 }
 
+function isOverdue(value: unknown): value is DerivedOverdue {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<DerivedOverdue>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.label === "string" &&
+    typeof row.amount === "number" &&
+    typeof row.kind === "string" &&
+    typeof row.date === "string"
+  );
+}
+
 function isDerived(value: unknown): value is DerivedState {
   if (!value || typeof value !== "object") return false;
   const derived = value as Partial<DerivedState>;
@@ -153,7 +164,9 @@ function isDerived(value: unknown): value is DerivedState {
     typeof derived.crunch.amount === "number" &&
     Array.isArray(derived.days) &&
     derived.days.length === 30 &&
-    derived.days.every(isDerivedDay)
+    derived.days.every(isDerivedDay) &&
+    (derived.overdue == null ||
+      (Array.isArray(derived.overdue) && derived.overdue.every(isOverdue)))
   );
 }
 
@@ -181,7 +194,7 @@ function readEntry(value: unknown): FinanceEntry | null {
 function isPlan(value: unknown): value is PlanState {
   if (!value || typeof value !== "object") return false;
   const plan = value as Partial<PlanState>;
-  return typeof plan.solvable === "boolean" && Array.isArray(plan.steps);
+  return typeof plan.solvable === "boolean";
 }
 
 function isAdvice(value: unknown): value is AdviceState {

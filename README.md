@@ -31,7 +31,6 @@ Then open **http://localhost:3000**
 |-----|------|
 | http://localhost:3000 | Call UI |
 | http://localhost:7860/health | Agent liveness |
-| http://localhost:3000/preview | Static board (no mic, no keys) |
 
 `docker compose` waits until the agent is healthy before starting the web app.
 Session rows live in a Docker volume (`KUBERA_DB_PATH=/data/kubera.db`), so a
@@ -55,14 +54,21 @@ the agent. Never commit `.env`.
 | `SARVAM_LANGUAGE` | no | `en-IN` | STT + TTS language |
 | `SARVAM_VOICE` | no | `rohan` | TTS voice |
 | `SARVAM_TTS_MODEL` | no | `bulbul:v3` | TTS model |
-| `SARVAM_SUMMARY_MODEL` | no | `sarvam-105b-conversations` | Out-of-band summary + advice rewrite. Must be a `/v1` model. |
+| `SARVAM_LLM_MODEL` | no | `sarvam-105b-conversations` | Voice LLM. Must be a `/v1` model. |
+| `SARVAM_SUMMARY_MODEL` | no | `sarvam-105b-conversations` | Summaries + advice rewrite. Must be `/v1`. |
+| `SARVAM_TTS_TEMPERATURE` | no | `0.8` | TTS sampling |
+| `DAILY_ROOM_TTL_SECS` | no | `3600` | Daily room + token lifetime |
+| `PIPELINE_IDLE_SECS` | no | `120` | Hang up after silence |
+| `BOT_JOIN_TIMEOUT_SECS` | no | `15` | Fail session create if bot never joins |
+| `VAD_CONFIDENCE` | no | `0.7` | Silero on the aggregator (TTFB), not turn-taking |
+| `VAD_START_SECS` | no | `0.1` | Speech start hang |
+| `VAD_STOP_SECS` | no | `1.5` | Speech end hang |
 
 `DAILY_ROOM_URL` and `DAILY_TOKEN` are set by the session worker at runtime.
 Do not put them in `.env`.
 
-Voice LLM is `sarvam-105b-conversations` (hardcoded). Do not point
-`SARVAM_SUMMARY_MODEL` at gemma4 / glm5.2 — those need `/v2` and summarization
-fails.
+Do not point `SARVAM_LLM_MODEL` or `SARVAM_SUMMARY_MODEL` at gemma4 / glm5.2 —
+those need `/v2` and tool-calling plus summarization fail.
 
 ## Local development (no Docker)
 
@@ -91,7 +97,7 @@ cd apps/agent && uv sync --dev && uv run pytest
 cd apps/web && npm test
 ```
 
-Currently: **67** agent tests, **31** web tests.
+Currently: **70** agent tests, **32** web tests.
 
 Engine tests freeze `today` and assert day-by-day balances. The LLM never
 computes those numbers.

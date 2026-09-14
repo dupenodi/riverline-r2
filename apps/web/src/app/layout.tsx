@@ -2,9 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Karla, Newsreader } from "next/font/google";
 import "./globals.css";
 
-// Karla carries the interface; Newsreader carries anything Kubera says. The
-// split is the point: a question read in a text serif sounds like a person
-// asking, and the same sentence in the UI face sounds like a form label.
+// Karla = UI; Newsreader = Kubera's voice.
 const karla = Karla({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],

@@ -44,6 +44,12 @@ class Movement:
     kind: Kind
 
 
+@dataclass(frozen=True)
+class OverdueHit:
+    date: date
+    move: Movement
+
+
 @dataclass
 class Day:
     date: date
@@ -72,18 +78,15 @@ class Projection:
     days: list[Day]
     crunch: Crunch
     finish: int
+    overdue: tuple[OverdueHit, ...] = ()
 
 
 def norm_label(label: str) -> str:
     return " ".join(label.lower().split())
 
 
-def is_card(entry: Entry) -> bool:
-    return "card" in entry.label.lower()
-
-
 def planning_amount(entry: Entry) -> int | None:
-    # A stated range is the fact. A point amount beside it is leftover extraction.
+    # Prefer stated range over a leftover point amount.
     if entry.amount_min is not None and entry.amount_max is not None:
         return entry.amount_min if is_inflow(entry) else entry.amount_max
     if entry.amount is not None:
@@ -204,12 +207,16 @@ def project(today: date, cash: int, entries: Sequence[Entry]) -> Projection:
     ]
     by_date = {day.date: day for day in days}
 
+    overdue: list[OverdueHit] = []
     for entry in entries:
         amount = planning_amount(entry)
         if amount is None:
             continue
         move = Movement(entry.id, entry.label, amount, entry.kind)
         for when in _occurrence_dates(today, end, entry):
+            if when < today:
+                overdue.append(OverdueHit(when, move))
+                continue
             cell = by_date.get(when)
             if cell is None:
                 continue
@@ -217,10 +224,18 @@ def project(today: date, cash: int, entries: Sequence[Entry]) -> Projection:
                 cell.inflows.append(move)
             else:
                 cell.outflows.append(move)
+    overdue.sort(key=lambda hit: (hit.date, hit.move.label))
 
     balance = cash
     crunch_amt = cash
     crunch_date = today
+    for hit in overdue:
+        if hit.move.kind in INFLOW_KINDS:
+            continue
+        balance -= hit.move.amount
+        if balance < crunch_amt:
+            crunch_amt = balance
+            crunch_date = today
     for cell in days:
         trough = balance
         for move in cell.outflows:
@@ -239,6 +254,7 @@ def project(today: date, cash: int, entries: Sequence[Entry]) -> Projection:
         days=days,
         crunch=Crunch(crunch_date, crunch_amt),
         finish=days[-1].closing,
+        overdue=tuple(overdue),
     )
 
 
@@ -308,7 +324,7 @@ def _occurrence_dates(today: date, end: date, entry: Entry) -> list[date]:
             if today <= when <= end:
                 return [when]
             if when < today and entry.status == "due":
-                return [today]
+                return [when]
             return []
 
     if entry.cadence in ("daily", "weekly"):
@@ -332,12 +348,12 @@ def _occurrence_dates(today: date, end: date, entry: Entry) -> list[date]:
         if entry.status == "paid":
             return []
         if this_cycle < today and entry.status == "due":
-            return [today]
+            return [this_cycle]
         return upcoming[:1]
 
     dates = list(upcoming)
     if entry.status == "paid":
         return [d for d in dates if d != this_cycle]
     if this_cycle < today and entry.status == "due":
-        return [today] + [d for d in dates if d != today]
+        return [this_cycle] + [d for d in dates if d != this_cycle]
     return dates

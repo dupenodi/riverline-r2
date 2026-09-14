@@ -10,7 +10,6 @@ from cashflow import (
     WINDOW_DAYS,
     Entry,
     Projection,
-    is_card,
     planning_amount,
     project,
     with_amount,
@@ -52,7 +51,7 @@ def build_plan(today: date, cash: int, entries: Sequence[Entry]) -> Plan:
         if proj.crunch.amount >= 0:
             return Plan(True, advice, None, None)
 
-    for card in _cards_with_min(working):
+    for card in _with_min_due(working):
         full = planning_amount(card)
         if full is None or card.min_due is None or card.min_due >= full:
             continue
@@ -220,10 +219,10 @@ def _flex_before_crunch(entries: Sequence[Entry], proj: Projection) -> list[Entr
     return eligible
 
 
-def _cards_with_min(entries: Sequence[Entry]) -> list[Entry]:
-    cards = [e for e in entries if is_card(e) and e.min_due is not None]
-    cards.sort(
+def _with_min_due(entries: Sequence[Entry]) -> list[Entry]:
+    rows = [e for e in entries if e.min_due is not None]
+    rows.sort(
         key=lambda e: (planning_amount(e) or 0) - (e.min_due or 0),
         reverse=True,
     )
-    return cards
+    return rows

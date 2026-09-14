@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import os
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
@@ -14,10 +12,11 @@ from loguru import logger
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.services.llm_service import FunctionCallParams
 
-from advise import advice_payload, picture, rewrite_points
+from advise import advice_payload, draft_points, picture, rewrite_points
 from cashflow import (
     WINDOW_DAYS,
     Entry,
+    Movement,
     Projection,
     issue_spans,
     missing as missing_fields,
@@ -29,7 +28,7 @@ from cashflow import (
     same_item,
     upsert,
 )
-from plan import Plan, PlanStep, build_plan
+from plan import Plan, build_plan
 
 KINDS = ("income", "need", "debt", "flex", "owed")
 CADENCES = ("monthly", "weekly", "daily", "once")
@@ -72,8 +71,7 @@ class MoneyTools:
         self._persist_cash = persist_cash
         self._persist_advice = persist_advice
         self._session_id = session_id
-        self._advice_points: list[str] = []
-        self._advice_task: asyncio.Task[None] | None = None
+        self._advice_points: list[str] | None = None
 
     async def publish(self) -> None:
         await self._on_change(self.snapshot())
@@ -169,6 +167,17 @@ class MoneyTools:
                 required=["ids"],
                 handler=self._handle_forget,
             ),
+            FunctionSchema(
+                name="recap",
+                description=(
+                    "Call once after they confirm they want the 30-day picture. "
+                    "Returns headline, upcoming, advice, and payoff to speak. "
+                    "Do not call while still collecting facts."
+                ),
+                properties={},
+                required=[],
+                handler=self._handle_recap,
+            ),
         ]
 
     def snapshot(self) -> dict[str, Any]:
@@ -187,7 +196,11 @@ class MoneyTools:
             derived = derived_from_projection(proj)
             plan = _plan_payload(built)
             advice = advice_payload(
-                self.today, self.cash, self.entries, proj, self._advice_points
+                self.today,
+                self.cash,
+                self.entries,
+                proj,
+                [] if self._advice_points is None else self._advice_points,
             )
             speak.update(
                 {
@@ -313,7 +326,7 @@ class MoneyTools:
             [asdict(e) for e in self.entries],
             problems,
         )
-        self._advice_points = []
+        self._advice_points = None
         snap = self.snapshot()
         await self._on_change(snap)
         await self._persist_advice_now(snap)
@@ -324,7 +337,6 @@ class MoneyTools:
                 + " ".join(problems)
             )
         await params.result_callback(result)
-        self._schedule_advise()
 
     async def _handle_forget(self, params: FunctionCallParams) -> None:
         ids = {str(i) for i in (params.arguments.get("ids") or [])}
@@ -343,41 +355,27 @@ class MoneyTools:
                 keep.append(entry)
         self.entries = keep
         logger.info("forget removed={}", removed)
-        self._advice_points = []
+        self._advice_points = None
         snap = self.snapshot()
         await self._on_change(snap)
         await self._persist_advice_now(snap)
         await params.result_callback(_llm_result(snap, removed=removed))
-        self._schedule_advise()
 
-    def _schedule_advise(self) -> None:
+    async def _handle_recap(self, params: FunctionCallParams) -> None:
         if self.cash is None:
-            return
-        if not os.getenv("SARVAM_API_KEY", "").strip():
-            return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        if self._advice_task is not None:
-            self._advice_task.cancel()
-        self._advice_task = loop.create_task(self._run_advise())
-
-    async def _run_advise(self) -> None:
-        await asyncio.sleep(0.45)
-        if self.cash is None:
+            await params.result_callback(
+                _llm_result(self.snapshot(), instruction="Need cash first.")
+            )
             return
         proj = project(self.today, self.cash, self.entries)
-        written = await rewrite_points(
-            picture(self.today, self.cash, self.entries, proj)
-        )
-        if not written or written == self._advice_points:
-            return
-        self._advice_points = written
+        brief = picture(self.today, self.cash, self.entries, proj)
+        written = await rewrite_points(brief)
+        self._advice_points = list(written or draft_points(brief))
         self.version += 1
         snap = self.snapshot()
         await self._on_change(snap)
         await self._persist_advice_now(snap)
+        await params.result_callback(_llm_result(snap))
 
     async def _persist_advice_now(self, snap: dict[str, Any]) -> None:
         if not self._persist_advice or not self._session_id:
@@ -393,19 +391,28 @@ def _upcoming_from(proj: Projection) -> list[dict[str, Any]]:
     first: dict[str, dict[str, Any]] = {}
     counts: dict[str, int] = {}
     order: list[str] = []
+
+    def add(when: date, move: Movement, *, overdue: bool) -> None:
+        counts[move.entry_id] = counts.get(move.entry_id, 0) + 1
+        if move.entry_id in first:
+            return
+        row: dict[str, Any] = {
+            "id": move.entry_id,
+            "label": move.label,
+            "amount": move.amount,
+            "kind": move.kind,
+            "date": when.isoformat(),
+        }
+        if overdue:
+            row["overdue"] = True
+        first[move.entry_id] = row
+        order.append(move.entry_id)
+
+    for hit in proj.overdue:
+        add(hit.date, hit.move, overdue=True)
     for day in proj.days:
         for move in (*day.outflows, *day.inflows):
-            counts[move.entry_id] = counts.get(move.entry_id, 0) + 1
-            if move.entry_id in first:
-                continue
-            first[move.entry_id] = {
-                "id": move.entry_id,
-                "label": move.label,
-                "amount": move.amount,
-                "kind": move.kind,
-                "date": day.date.isoformat(),
-            }
-            order.append(move.entry_id)
+            add(day.date, move, overdue=False)
     rows: list[dict[str, Any]] = []
     for entry_id in order:
         row = dict(first[entry_id])
@@ -429,29 +436,12 @@ _INT_FIELDS = (
 
 
 def _plan_payload(built: Plan) -> dict[str, Any]:
+    """Gap math only. Spoken/rail advice is `advice`, not template steps."""
     return {
         "solvable": built.solvable,
-        "steps": [_step_payload(step) for step in built.steps],
         "gap": built.gap,
         "gap_date": built.gap_date.isoformat() if built.gap_date else None,
     }
-
-
-def _step_payload(step: PlanStep) -> dict[str, Any]:
-    row: dict[str, Any] = {
-        "action": step.action,
-        "label": step.label,
-        "amount": step.amount,
-        "crunch_before": step.crunch_before,
-        "crunch_after": step.crunch_after,
-    }
-    if step.date is not None:
-        row["date"] = step.date.isoformat()
-    if step.until is not None:
-        row["until"] = step.until.isoformat()
-    if step.note:
-        row["note"] = step.note
-    return row
 
 
 def _llm_result(snap: dict[str, Any], **extra: Any) -> dict[str, Any]:
@@ -461,23 +451,9 @@ def _llm_result(snap: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "cash": snap["cash"],
         "entries": snap["entries"],
         "missing": snap["missing"],
-        "speak": _speak_for_llm(snap["speak"]),
-        "plan": snap["plan"],
+        "speak": snap["speak"],
         "conflicts": snap["conflicts"],
     }
-
-
-LLM_UPCOMING_CAP = 24
-
-
-def _speak_for_llm(speak: dict[str, Any]) -> dict[str, Any]:
-    """Keep tool results small; never send 30 daily occurrence rows."""
-    out = dict(speak)
-    upcoming = out.get("upcoming")
-    if isinstance(upcoming, list) and len(upcoming) > LLM_UPCOMING_CAP:
-        out["upcoming"] = upcoming[:LLM_UPCOMING_CAP]
-        out["upcoming_more"] = len(upcoming) - LLM_UPCOMING_CAP
-    return out
 
 
 def _prune_conflicts(conflicts: list[str], label: str) -> list[str]:
@@ -690,6 +666,16 @@ def derived_from_projection(proj: Projection) -> dict[str, Any]:
                 ],
             }
             for day in proj.days
+        ],
+        "overdue": [
+            {
+                "id": hit.move.entry_id,
+                "label": hit.move.label,
+                "amount": hit.move.amount,
+                "kind": hit.move.kind,
+                "date": hit.date.isoformat(),
+            }
+            for hit in proj.overdue
         ],
     }
 

@@ -28,7 +28,7 @@ describe("acceptTransactions", () => {
       ],
       missing: [],
       conflicts: [],
-      plan: { solvable: true, steps: [], gap: null, gap_date: null },
+      plan: { solvable: true, gap: null, gap_date: null },
     });
     const stale = acceptTransactions(first, {
       type: "finance",
@@ -60,7 +60,6 @@ describe("acceptTransactions", () => {
       conflicts: ["Card: 20000 then 22000"],
       plan: {
         solvable: false,
-        steps: [{ action: "cut", label: "Netflix", amount: 499 }],
         gap: 1000,
         gap_date: "2026-09-21",
       },
@@ -93,21 +92,48 @@ describe("acceptTransactions", () => {
       conflicts: [],
       plan: {
         solvable: true,
-        steps: [
-          {
-            action: "collect",
-            label: "Karthik",
-            amount: 5000,
-            date: "2026-09-24",
-          },
-        ],
         gap: null,
         gap_date: null,
       },
     });
     assert.equal(next.entries[0]?.kind, "owed");
     assert.equal(next.entries[0]?.on_date, "2026-09-24");
-    assert.equal(next.plan?.steps[0]?.action, "collect");
+    assert.equal(next.plan?.solvable, true);
+  });
+
+  it("keeps overdue hits on derived", () => {
+    const days = Array.from({ length: 30 }, (_, i) => {
+      const day = 14 + i;
+      const date =
+        day <= 30 ? `2026-09-${String(day).padStart(2, "0")}` : `2026-10-${String(day - 30).padStart(2, "0")}`;
+      return {
+        date,
+        in: 0,
+        out: 0,
+        closing: 40000,
+        moves: [],
+      };
+    });
+    const next = acceptTransactions(EMPTY_TRANSACTIONS, {
+      type: "finance",
+      version: 1,
+      cash: 50000,
+      derived: {
+        finish: 30000,
+        crunch: { date: "2026-10-05", amount: 30000 },
+        days,
+        overdue: [
+          {
+            id: "rent",
+            label: "Rent",
+            amount: 10000,
+            kind: "need",
+            date: "2026-09-05",
+          },
+        ],
+      },
+    });
+    assert.equal(next.derived?.overdue?.[0]?.date, "2026-09-05");
   });
 });
 

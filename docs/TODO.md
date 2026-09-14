@@ -8,7 +8,7 @@ Decision journal is owned by a separate pass — do not generate it here.
 - [x] `docker compose up --build` brings up web + agent
 - [x] README: Docker, every env var, where keys come from, exact command, exact URL
 - [x] `.env.example` matches the variables the code reads
-- [x] Tests: 67 agent + 31 web, engine math without a microphone
+- [x] Tests: 70 agent + 32 web, engine math without a microphone
 - [ ] Demo video
 - [x] Decision journal (`DECISION_JOURNAL.md`)
 

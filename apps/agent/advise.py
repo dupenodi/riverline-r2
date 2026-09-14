@@ -23,6 +23,7 @@ from cashflow import (
     is_inflow,
     planning_amount,
 )
+from settings import summary_model
 
 _MONTHS = (
     "Jan",
@@ -42,8 +43,13 @@ _MONTHS = (
 ADVICE_PROMPT = """You write short, specific 30-day money advice.
 The JSON is the only source of numbers and labels. Do not invent either.
 Write 3 to 5 bullets. One sentence each. Indian English. No markdown.
-Talk about THIS ledger: what to delay, shrink, substitute, or collect, and why.
-Cheaper substitutes for flex (free plan instead of paid) are allowed.
+Use the verbs on the right side of the ledger:
+- Delay: optional or flex spending, especially before a heavy outflow day.
+- Shrink or substitute: daily and flex outflows (a free or cheaper version is allowed).
+- Collect: income and money owed, so it is in hand before a bill that needs it.
+Cash already received is useful. Waiting to collect does not help a 30-day picture.
+If the lowest is still comfortably positive, talk about the real leaks
+(daily spend, clustered bills), not matching inflow dates to outflow dates.
 No loans. No investing. Do not mention tools.
 Do not write a payoff about the lowest balance or staying above zero.
 Reply with JSON only: {"points":["...","..."]}
@@ -72,6 +78,8 @@ def picture(
 ) -> dict[str, Any]:
     """Compact ledger the writer (model or draft) is allowed to use."""
     hits: dict[str, list[date]] = defaultdict(list)
+    for hit in proj.overdue:
+        hits[hit.move.entry_id].append(hit.date)
     for day in proj.days:
         for move in (*day.outflows, *day.inflows):
             hits[move.entry_id].append(day.date)
@@ -136,7 +144,7 @@ def payoff_from(proj: Projection) -> dict[str, Any]:
 
 
 def draft_points(brief: dict[str, Any]) -> list[str]:
-    """Data-backed bullets when the model is not used. Still about THIS ledger."""
+    """Ledger facts when the rewrite is skipped."""
     points: list[str] = []
     items: list[dict[str, Any]] = list(brief.get("items") or [])
     cash = int(brief.get("cash") or 0)
@@ -177,8 +185,7 @@ def draft_points(brief: dict[str, Any]) -> list[str]:
     for row in flex[:2]:
         when = f" on {short_date(row['date'])}" if row.get("date") else ""
         points.append(
-            f"{row['label']} {rupees(int(row['amount']))}{when} is optional — "
-            "cut it or use a cheaper version if the week before looks tight."
+            f"{row['label']} {rupees(int(row['amount']))}{when} is flex."
         )
 
     incomes = [
@@ -194,7 +201,7 @@ def draft_points(brief: dict[str, Any]) -> list[str]:
             points.append(
                 f"{inc['label']} {rupees(int(inc['amount']))} arrives "
                 f"{short_date(str(inc['date']))}, after the heavy day on "
-                f"{short_date(first_heavy)}. Optional spend before that can wait."
+                f"{short_date(first_heavy)}."
             )
 
     weekly = [row for row in items if row.get("cadence") == "weekly" and row.get("total")]
@@ -225,7 +232,7 @@ def advice_payload(
 ) -> dict[str, Any]:
     brief = picture(today, cash, entries, proj)
     return {
-        "points": list(points or draft_points(brief)),
+        "points": draft_points(brief) if points is None else list(points),
         "payoff": payoff_from(proj),
         "brief": brief,
     }
@@ -236,7 +243,7 @@ async def rewrite_points(brief: dict[str, Any]) -> list[str] | None:
     key = os.getenv("SARVAM_API_KEY", "").strip()
     if not key:
         return None
-    model = os.getenv("SARVAM_SUMMARY_MODEL", "sarvam-105b-conversations")
+    model = summary_model()
     body = {
         "today": brief.get("today"),
         "cash": brief.get("cash"),

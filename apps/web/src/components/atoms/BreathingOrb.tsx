@@ -16,9 +16,9 @@ export type OrbState =
 type BreathingOrbProps = {
   state?: OrbState;
   size?: "md" | "lg";
-  /** Stronger pulse when mic is picking up input */
+  /** Pulse harder when the mic hears input. */
   active?: boolean;
-  /** Live loudness of whoever currently holds the floor. */
+  /** Live loudness for the current speaker. */
   meter?: LevelMeter | null;
 };
 
@@ -29,8 +29,6 @@ export function BreathingOrb({
   meter = null,
 }: BreathingOrbProps) {
   const ref = useRef<HTMLDivElement>(null);
-  // The orb tracks whoever is talking: the user while listening, Kubera while
-  // speaking. Muted and connecting states have nothing to track.
   const tracking = state === "speaking" || (state === "listening" && active);
   useLevelVar(ref, meter, "--level", { gain: 2.4, enabled: tracking });
 

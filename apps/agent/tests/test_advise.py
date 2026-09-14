@@ -29,11 +29,17 @@ def test_draft_covers_daily_burn_and_same_day_lumps() -> None:
     assert "Rapido" in blob
     assert "SIP" in blob
     assert "Dinner" in blob
+    assert "optional" not in blob.lower()
+    assert "cut it" not in blob.lower()
+    assert "cheaper" not in blob.lower()
+    assert "can wait" not in blob.lower()
     payload = advice_payload(TODAY, 40_000, entries, proj)
     assert payload["payoff"]["ok"] is True
     assert payload["payoff"]["date"] == proj.crunch.date.isoformat()
     assert payload["points"]
     assert "stays above zero" not in blob.lower()
+    empty = advice_payload(TODAY, 40_000, entries, proj, points=[])
+    assert empty["points"] == []
 
 
 def test_short_date() -> None:

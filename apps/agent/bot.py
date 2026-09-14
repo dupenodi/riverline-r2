@@ -1,9 +1,9 @@
 """
 Kubera conversational voice bot (Pipecat + Daily).
 
-Pipeline follows Pipecat's official Sarvam examples:
-- STT: voice-sarvam-realtime.py (SarvamRealtimeSTTService, manual endpointing)
-- LLM + tools: function-calling-sarvam.py (SarvamLLMService)
+Pipeline follows Pipecat's Sarvam realtime STT docs:
+- STT: SarvamRealtimeSTTService, endpointing="vad", prefix_padding_ms
+- LLM + tools: SarvamLLMService
 - TTS: SarvamTTSService (bulbul:v3)
 
 Live captions are handled by PipelineWorker's RTVIObserver — no custom observers.
@@ -40,14 +40,19 @@ from pipecat.workers.runner import WorkerRunner
 import store
 from context_summary import assistant_aggregator_params
 from prompts import GREETING_PROMPT, STT_PROMPT, get_system_instruction
-from speech_gate import SpeechAudioGate
+from settings import (
+    bot_join_timeout_secs,
+    llm_model,
+    pipeline_idle_secs,
+    tts_temperature,
+    vad_confidence,
+    vad_start_secs,
+    vad_stop_secs,
+)
 from tools import MoneyTools
 from transcript import AgentTranscriptTap, TranscriptWriter, UserTranscriptTap
 
-# session_id → running WorkerRunner + its host task
 _running: dict[str, "_RunningBot"] = {}
-
-PIPELINE_IDLE_TIMEOUT_SECS = 120.0
 
 
 @dataclass
@@ -93,12 +98,12 @@ async def _run_pipeline(
         ),
     )
 
-    # Sarvam closes idle realtime sockets at ~60s (close 1008). Our SpeechAudioGate
-    # drops non-speech, so without pings the socket dies during agent talk / silence.
-    # Pipecat sends {"event":"ping"} when keepalive_timeout is set.
+    # Server VAD + prefix padding (Pipecat Sarvam docs). Keepalive is separate
+    # (idle websocket close ~60s).
     stt = SarvamRealtimeSTTService(
         api_key=sarvam_key,
-        endpointing="manual",
+        endpointing="vad",
+        prefix_padding_ms=300,
         keepalive_timeout=30.0,
         keepalive_interval=5.0,
         settings=SarvamRealtimeSTTService.Settings(
@@ -109,11 +114,10 @@ async def _run_pipeline(
         ),
     )
 
-    # sarvam-105b uses /v2 (beta-gated). Conversations model uses /v1.
     llm = SarvamLLMService(
         api_key=sarvam_key,
         settings=SarvamLLMService.Settings(
-            model="sarvam-105b-conversations",
+            model=llm_model(),
             system_instruction=get_system_instruction(),
         ),
     )
@@ -125,7 +129,7 @@ async def _run_pipeline(
             model=os.getenv("SARVAM_TTS_MODEL", "bulbul:v3"),
             voice=os.getenv("SARVAM_VOICE", "rohan"),
             language=language_code,
-            temperature=0.8,
+            temperature=tts_temperature(),
         ),
     )
 
@@ -146,16 +150,16 @@ async def _run_pipeline(
 
     vad = SileroVADAnalyzer(
         params=VADParams(
-            confidence=0.7,
-            start_secs=0.1,
-            stop_secs=1.5,
+            confidence=vad_confidence(),
+            start_secs=vad_start_secs(),
+            stop_secs=vad_stop_secs(),
         ),
     )
 
     context = LLMContext(tools=money.schemas())
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(),
+        user_params=LLMUserAggregatorParams(vad_analyzer=vad),
         assistant_params=assistant_aggregator_params(api_key=sarvam_key),
     )
 
@@ -176,7 +180,6 @@ async def _run_pipeline(
     pipeline = Pipeline(
         [
             transport.input(),
-            SpeechAudioGate(vad),
             stt,
             UserTranscriptTap(turns),
             user_aggregator,
@@ -194,7 +197,7 @@ async def _run_pipeline(
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
-        idle_timeout_secs=PIPELINE_IDLE_TIMEOUT_SECS,
+        idle_timeout_secs=pipeline_idle_secs(),
         processor_unusable_policy=ProcessorUnusablePolicy.END,
     )
 
@@ -264,17 +267,13 @@ async def start_bot(
     session_id: str,
     room_url: str,
     token: str,
-    join_timeout: float = 15.0,
+    join_timeout: float | None = None,
 ) -> None:
-    """Join a Daily room and run the voice pipeline for a session.
-
-    Returns once the bot is actually in the room, so callers never hand a
-    client credentials for a room nobody is waiting in.
-    """
+    """Join Daily room; returns once the bot is in."""
     if session_id in _running and not _running[session_id].task.done():
         raise RuntimeError(f"Bot already running for session {session_id}")
 
-    # FastAPI already owns process signals; do not steal SIGINT from uvicorn.
+    # Don't steal SIGINT from uvicorn.
     runner = WorkerRunner(handle_sigint=False)
     joined = asyncio.Event()
     task = asyncio.create_task(
@@ -301,12 +300,13 @@ async def start_bot(
 
     task.add_done_callback(_cleanup)
 
+    wait = bot_join_timeout_secs() if join_timeout is None else join_timeout
     try:
-        await asyncio.wait_for(joined.wait(), timeout=join_timeout)
+        await asyncio.wait_for(joined.wait(), timeout=wait)
     except asyncio.TimeoutError:
         await cancel_bot(session_id=session_id)
         raise RuntimeError(
-            f"Bot did not join the room within {join_timeout:.0f}s"
+            f"Bot did not join the room within {wait:.0f}s"
         ) from None
 
     if task.done():

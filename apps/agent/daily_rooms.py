@@ -18,6 +18,8 @@ from pipecat.transports.daily.utils import (
     DailyRoomProperties,
 )
 
+from settings import daily_room_ttl_secs
+
 
 @dataclass(frozen=True)
 class DailyRoomCredentials:
@@ -39,8 +41,10 @@ def _api_url() -> str:
     return os.getenv("DAILY_API_URL", "https://api.daily.co/v1").rstrip("/")
 
 
-async def create_room_and_tokens(*, ttl_seconds: int = 3600) -> DailyRoomCredentials:
+async def create_room_and_tokens(*, ttl_seconds: int | None = None) -> DailyRoomCredentials:
     """Create a private Daily room and mint user + bot meeting tokens."""
+    if ttl_seconds is None:
+        ttl_seconds = daily_room_ttl_secs()
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     room_name = f"kubera-{uuid.uuid4().hex[:12]}"
     exp = time.time() + ttl_seconds

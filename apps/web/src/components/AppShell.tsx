@@ -100,7 +100,6 @@ export function AppShell() {
     agentSpeakingRef.current = agentSpeaking;
   }, [agentSpeaking]);
 
-  // The clock starts when the call does (see `goLive`); this only keeps it ticking.
   useEffect(() => {
     if (phase !== "ready") return;
     const id = window.setInterval(() => {
@@ -110,8 +109,6 @@ export function AppShell() {
     return () => window.clearInterval(id);
   }, [phase]);
 
-  // A closed tab is still a live Daily room and a live bot on the server, so
-  // the session gets one last best-effort DELETE on the way out.
   useEffect(() => {
     const release = () => {
       const current = sessionRef.current;
@@ -162,7 +159,7 @@ export function AppShell() {
     callStartedAt.current = null;
   }, []);
 
-  /** Everything is up: start the clock and show the call screen. */
+  /** Start the call clock and show the call screen. */
   const goLive = useCallback(() => {
     callStartedAt.current = Date.now();
     setElapsed(0);
@@ -184,7 +181,7 @@ export function AppShell() {
     resetToIdle();
   }, [resetToIdle, teardownClient]);
 
-  /** Wind the call down. `reason` decides what the ended screen says. */
+  /** End the call; `reason` picks the ended-screen copy. */
   const closeCall = useCallback(
     async (reason: EndReason) => {
       setPhase((current) =>
@@ -288,8 +285,7 @@ export function AppShell() {
       enableMic: true,
       enableCam: false,
       callbacks: {
-        // Official Daily client pattern: attach remote audio yourself.
-        // https://docs.pipecat.ai/api-reference/client/js/overview
+        // Attach remote audio ourselves (Daily/Pipecat client pattern).
         onTrackStarted: (track, participant) => {
           if (!participant || participant.local || track.kind !== "audio") {
             return;
@@ -301,8 +297,6 @@ export function AppShell() {
           document.body.appendChild(audioElement);
           botAudioElRef.current = audioElement;
           void audioElement.play().catch(() => {
-            // Autoplay blocked: the call is up but silent, which is worth
-            // saying out loud rather than letting the user wonder.
             setNotice("Tap anywhere to let this page play audio.");
           });
         },
@@ -317,8 +311,6 @@ export function AppShell() {
           setConnectStep("assistant");
         },
 
-        // Loudness, sampled by the Daily transport at 10 Hz. Kept out of React
-        // state so the visuals animate without re-rendering the call screen.
         onLocalAudioLevel: (level) => micMeter.set(level),
 
         onBotStartedSpeaking: () => {
@@ -338,8 +330,6 @@ export function AppShell() {
         onUserStartedSpeaking: () => {
           setUserTalking(true);
           setTranscript((prev) =>
-            // Talking over Kubera ends its turn where the audio actually
-            // stopped, instead of letting the caption run on.
             agentSpeakingRef.current
               ? userSpeaking(interrupted(prev))
               : userSpeaking(prev),
@@ -356,9 +346,7 @@ export function AppShell() {
         },
 
         onBotOutput: (data) => {
-          // The RTVI contract, applied as written (see lib/transcript.ts):
-          //   "new" / never-spoken  → create the segment
-          //   in-progress/completed → advance spoken only (id may differ)
+          // "new"/never-spoken → create; progress/completed → advance spoken only.
           const id =
             data.segment_id === undefined || data.segment_id === null
               ? data.text
@@ -367,8 +355,6 @@ export function AppShell() {
           const status = data.spoken_status;
           const willBeSpoken = data.will_be_spoken ?? data.spoken ?? true;
 
-          // Text that never reaches TTS is on screen the moment it arrives;
-          // there will be no progress message to mark it said.
           if (!willBeSpoken || status === undefined || status === null) {
             setTranscript((prev) =>
               agentSegment(prev, { id, text, spoken: text, create: true }),
@@ -419,7 +405,6 @@ export function AppShell() {
           void closeCall("dropped");
         },
         onDisconnected: () => {
-          // Only meaningful if we did not ask for it.
           if (cancelled()) return;
           if (clientRef.current) void closeCall("dropped");
         },

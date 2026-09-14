@@ -9,4 +9,3 @@ npm test
 ```
 
 - App: http://localhost:3000
-- Board preview (no agent): http://localhost:3000/preview

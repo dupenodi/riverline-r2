@@ -1,15 +1,3 @@
-/**
- * The transcript model, against the RTVI contract it is built on.
- *
- * These exist because the previous version guessed: it prefix-matched
- * consecutive finals to choose between replacing and appending, and it treated
- * `accumulated_text` as a character offset into a different string. Both put
- * words on screen nobody said. Every case below is one of those guesses,
- * written down as the behaviour it should have had.
- *
- * Run with `npm test` (Node's built-in runner; no framework).
- */
-
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -40,8 +28,6 @@ describe("user transcripts", () => {
   });
 
   it("replaces the previous interim instead of appending it", () => {
-    // The bug this file exists for. Sarvam re-sends the whole utterance as it
-    // revises, so appending produced "I have 30,000 I have 45,000".
     let t = userSpeaking(EMPTY);
     t = userInterim(t, "I have thirty");
     t = userInterim(t, "I have thirty thousand");
@@ -59,7 +45,6 @@ describe("user transcripts", () => {
   });
 
   it("accumulates several finals in one turn", () => {
-    // A long answer can be segmented server-side into more than one utterance.
     let t = userSpeaking(EMPTY);
     t = userFinal(t, "I pay rent on the twentieth.");
     t = userFinal(t, "It is twenty four thousand.");
@@ -80,8 +65,6 @@ describe("user transcripts", () => {
   });
 
   it("keeps words that were only ever an interim when the turn ends", () => {
-    // They stopped talking and Kubera started before the final landed. Those
-    // words were recognised; dropping them loses what the user actually said.
     let t = userSpeaking(EMPTY);
     t = userInterim(t, "and the car loan");
     t = agentTurnStarted(t);
@@ -106,7 +89,7 @@ describe("user transcripts", () => {
   });
 
   it("drops a turn that never produced a word", () => {
-    let t = userSpeaking(EMPTY); // a cough that tripped VAD
+    let t = userSpeaking(EMPTY);
     t = agentTurnStarted(t);
 
     assert.equal(t.filter((turn) => turn.role === "user").length, 0);
@@ -117,9 +100,6 @@ describe("assistant output", () => {
   const seg = (id: string, text: string, spoken: string) => ({ id, text, spoken });
 
   it("shows a sentence before the voice has reached it, dimmed", () => {
-    // Sarvam's TTS reports no word timestamps, so a segment sits at spoken=""
-    // for its whole duration. Withholding it leaves the screen blank for the
-    // entire turn and then snaps it in.
     let t = agentTurnStarted(EMPTY);
     t = agentSegment(t, seg("1", "What is your rent?", ""));
 
@@ -141,8 +121,6 @@ describe("assistant output", () => {
   });
 
   it("uses accumulated_text verbatim, never a character count", () => {
-    // The old code did `text.slice(0, accumulated.length)`, which silently
-    // diverges the moment the server applies any transform to either string.
     let t = agentTurnStarted(EMPTY);
     t = agentSegment(t, seg("1", "It is twenty four thousand.", "It is 24,000"));
 
@@ -153,7 +131,6 @@ describe("assistant output", () => {
     let t = agentTurnStarted(EMPTY);
     t = agentSegment(t, { id: "1", text: "One.", spoken: "", create: true });
     t = agentSegment(t, { id: "2", text: "Two.", spoken: "", create: true });
-    // Same id: progress updates in place even when create is false.
     t = agentSegment(t, {
       id: "1",
       text: "One.",
@@ -166,7 +143,6 @@ describe("assistant output", () => {
   });
 
   it("stops the spoken run at the first unfinished segment", () => {
-    // Segment two being done does not mean segment one was said.
     let t = agentTurnStarted(EMPTY);
     t = agentSegment(t, seg("1", "One.", ""));
     t = agentSegment(t, seg("2", "Two.", "Two."));
@@ -212,8 +188,6 @@ describe("assistant output", () => {
   });
 
   it("does not double a sentence when completed uses a different segment_id", () => {
-    // Live RTVI (captured in docs/build-log.md): one sentence, two messages,
-    // two ids. Progress must advance the "new" segment, not append.
     let t = agentTurnStarted(EMPTY);
     t = agentSegment(t, {
       id: "1005",

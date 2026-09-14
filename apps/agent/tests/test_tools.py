@@ -68,7 +68,9 @@ def test_record_cash_and_entries(money: MoneyTools) -> None:
     assert "items" not in snap
     assert "gap" not in snap["speak"]
     assert "issues" in snap["speak"]
-    assert "gap" in snap["plan"]
+    assert "plan" not in snap
+    assert "gap" in money.snapshot()["plan"]
+    assert "steps" not in money.snapshot()["plan"]
     assert snap["speak"]["upcoming"] == [
         {
             "id": money.entries[1].id,
@@ -123,8 +125,8 @@ def test_forget(money: MoneyTools) -> None:
     assert "derived" not in remove.result
 
 
-def test_schemas_are_record_and_forget(money: MoneyTools) -> None:
-    assert [s.name for s in money.schemas()] == ["record", "forget"]
+def test_schemas_are_record_forget_recap(money: MoneyTools) -> None:
+    assert [s.name for s in money.schemas()] == ["record", "forget", "recap"]
 
 
 def test_restatement_overwrites(money: MoneyTools) -> None:
@@ -341,12 +343,17 @@ def test_daily_zomato_needs_no_day(money: MoneyTools) -> None:
     assert len(upcoming) == 1
     assert upcoming[0]["times"] == 30
     assert upcoming[0]["total"] == 18_000
-    assert "upcoming_more" not in params.result["speak"]
     assert params.result["speak"]["headline"]["cash"] == 20_000
-    advice = params.result["speak"]["advice"]
+    assert params.result["speak"]["advice"]["points"] == []
+    recap = _Params({})
+    asyncio.run(money._handle_recap(recap))
+    advice = recap.result["speak"]["advice"]
     assert any("Zomato" in line for line in advice["points"])
     assert "lowest" in advice["payoff"]
     assert money.snapshot()["advice"]["points"] == advice["points"]
+    patch = _Params({"items": [{"id": money.entries[0].id, "amount": 700}]})
+    asyncio.run(money._handle_record(patch))
+    assert money.snapshot()["advice"]["points"] == []
 
 
 def test_due_label_clash_keeps_old_and_records_conflict(money: MoneyTools) -> None:
@@ -498,6 +505,46 @@ def test_in_days_sets_on_date_not_today() -> None:
     days = {d["date"]: d for d in published[-1]["derived"]["days"]}
     assert any(m["label"] == "Airtel" for m in days["2026-09-19"]["moves"])
     assert not any(m["label"] == "Airtel" for m in days["2026-09-14"]["moves"])
+
+
+def test_overdue_due_keeps_original_date_on_upcoming() -> None:
+    published: list[dict[str, Any]] = []
+
+    async def on_change(payload: dict[str, Any]) -> None:
+        published.append(payload)
+
+    money = MoneyTools(on_change=on_change, today=date(2026, 9, 14))
+    asyncio.run(money._handle_record(_Params({"cash": 50_000})))
+    params = _Params(
+        {
+            "items": [
+                {
+                    "kind": "need",
+                    "label": "Rent",
+                    "amount": 10_000,
+                    "day": 5,
+                    "status": "due",
+                }
+            ]
+        }
+    )
+    asyncio.run(money._handle_record(params))
+    rent = params.result["speak"]["upcoming"][0]
+    assert rent["date"] == "2026-09-05"
+    assert rent["overdue"] is True
+    assert rent["times"] == 2
+    days = {d["date"]: d for d in published[-1]["derived"]["days"]}
+    assert not any(m["label"] == "Rent" for m in days["2026-09-14"]["moves"])
+    assert any(m["label"] == "Rent" for m in days["2026-10-05"]["moves"])
+    assert published[-1]["derived"]["overdue"] == [
+        {
+            "id": money.entries[0].id,
+            "label": "Rent",
+            "amount": 10_000,
+            "kind": "need",
+            "date": "2026-09-05",
+        }
+    ]
 
 
 def test_two_freelance_dates_in_one_call() -> None:
