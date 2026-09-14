@@ -1,0 +1,38 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor": "#eef6f2",
+    "primaryTextColor": "#1c2e28",
+    "primaryBorderColor": "#2d6a5a",
+    "secondaryColor": "#ffffff",
+    "tertiaryColor": "#f6faf8",
+    "lineColor": "#4a6a5e",
+    "fontFamily": "ui-sans-serif, system-ui, sans-serif"
+  },
+  "flowchart": { "curve": "basis", "padding": 12 }
+}}%%
+flowchart LR
+  web["apps/web<br/>Next.js :3000<br/>calendar, rail, captions"]
+
+  subgraph dailyBox [Daily]
+    daily["Room, tokens, WebRTC"]
+  end
+
+  subgraph agentBox [apps/agent FastAPI :7860]
+    pipe["Pipecat pipeline"]
+    engine["cashflow.py<br/>only arithmetic"]
+    db[("SQLite")]
+  end
+
+  subgraph sarvamBox [Sarvam]
+    stt["Realtime STT"]
+    llm["LLM<br/>record, forget, recap"]
+    tts["TTS bulbul:v3"]
+  end
+
+  web -->|"POST /sessions"| daily
+  daily <-->|"voice"| pipe
+  pipe --> stt --> llm --> tts
+  tts -->|"audio"| daily
+  llm --> engine --> db
+  engine -->|"RTVI snapshot"| web

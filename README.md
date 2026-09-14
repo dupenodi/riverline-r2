@@ -1,5 +1,7 @@
 # Kubera
 
+![Kubera architecture](architecture.png)
+
 Voice agent that maps the next 30 days of someone’s money.
 
 The model extracts facts. A deterministic engine (`apps/agent/cashflow.py`)
