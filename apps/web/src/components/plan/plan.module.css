@@ -79,15 +79,11 @@
 
 .cal {
   border-top: 1px solid var(--border);
+  overflow: visible;
 }
 
 .calScroll {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
-
-.calScroll > .cal {
-  min-width: 24rem;
+  overflow: visible;
 }
 
 .calHead,
@@ -97,35 +93,45 @@
 }
 
 .weekday {
-  padding: 6px 8px;
+  padding: 8px 4px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-ghost);
   border-bottom: 1px solid var(--hairline);
+  text-align: center;
 }
 
 .pad {
   border-bottom: 1px solid var(--hairline);
+  min-height: 52px;
 }
 
 .cell {
-  min-height: 62px;
-  padding: 6px 8px 8px;
+  position: relative;
+  min-height: 52px;
+  padding: 8px 4px 10px;
   border-bottom: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+  z-index: 0;
+}
+
+.cellOpen {
+  z-index: 5;
 }
 
 .cellNum {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 4px;
-  font-size: 11px;
-  color: var(--ink-ghost);
+  font-size: 12px;
+  color: var(--ink-faint);
 }
 
 .cellMonth {
@@ -137,107 +143,139 @@
   color: var(--accent);
 }
 
-.cellMove {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  flex: none;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
 }
 
-.cellLabel {
-  font-size: 10.5px;
-  line-height: 1.25;
-  color: var(--ink-dim);
-  overflow-wrap: anywhere;
+.swatch:hover {
+  transform: scale(1.15);
 }
 
-.cellAmount {
-  font-size: 10.5px;
-  color: var(--ink-dim);
+.swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
-.cellMore {
-  font-size: 9.5px;
-  color: var(--ink-ghost);
-}
-
-.cellFlag {
-  margin-top: auto;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-ghost);
-  white-space: nowrap;
-}
-
-/* Tones. Silence is the default; ink is spent only where money moves. */
 .tone_quiet {
-  background: transparent;
+  background: var(--border-soft);
+  border-color: var(--border);
 }
 
 .tone_out {
-  background: var(--surface-sunk);
-}
-
-.tone_out .cellNum,
-.tone_out .cellAmount {
-  color: var(--ink-soft);
-  font-weight: 600;
+  background: var(--ink-ghost);
+  border-color: var(--ink-faint);
 }
 
 .tone_in {
-  background: var(--in-tint);
-}
-
-.tone_in .cellNum,
-.tone_in .cellLabel,
-.tone_in .cellAmount {
-  color: var(--in);
-}
-
-.tone_in .cellAmount {
-  font-weight: 600;
+  background: var(--in);
+  border-color: var(--in);
 }
 
 .tone_today {
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
-.tone_today .cellNum {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.tone_today .cellFlag {
-  color: var(--accent);
-}
-
-/* The single day worth pointing at. The only clay in the interface. */
 .tone_low {
-  background: var(--danger-tint);
-  box-shadow: inset 3px 0 0 var(--danger);
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-tint);
 }
 
-.tone_low .cellNum,
-.tone_low .cellLabel,
-.tone_low .cellAmount,
-.tone_low .cellFlag {
-  color: var(--danger);
+.popover {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  width: max(11.5rem, 140%);
+  min-width: 11.5rem;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 10px 28px oklch(0.24 0.022 162 / 0.12);
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(-4px) scale(0.96);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    visibility 0s linear 180ms;
+  z-index: 6;
 }
 
-.spread {
+.popoverOpen {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0) scale(1);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    visibility 0s;
+}
+
+.popoverDate {
   margin: 0;
-  padding: 9px 8px 0;
-  font-size: 11.5px;
-  line-height: 1.5;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ink-faint);
-  text-wrap: pretty;
 }
 
-.spread b {
-  font-weight: 600;
+.popoverBalance {
+  margin: 4px 0 0;
+  font-size: 16px;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.popoverTone {
+  margin: 2px 0 0;
+  font-size: 11.5px;
   color: var(--ink-muted);
+}
+
+.popoverEmpty {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-ghost);
+}
+
+.popoverMoves {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.popoverMoves li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.popoverMoves li span:last-child {
+  white-space: nowrap;
+  color: var(--ink-soft);
 }
 
 /* --- what to change ------------------------------------------------------ */
@@ -335,13 +373,13 @@
   }
 
   .cell {
-    min-height: 52px;
-    padding: 5px 5px 6px;
+    min-height: 48px;
+    padding: 6px 2px 8px;
   }
 
-  .cellLabel,
-  .cellAmount {
-    font-size: 9.5px;
+  .swatch {
+    width: 12px;
+    height: 12px;
   }
 
   .change {

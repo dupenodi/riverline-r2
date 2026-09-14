@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import Image from "next/image";
 import { AppFrame } from "@/components/shells/AppFrame";
 import styles from "./WelcomeScreen.module.css";
@@ -8,9 +7,6 @@ import styles from "./WelcomeScreen.module.css";
 type WelcomeScreenProps = {
   onStart: () => void;
   busy?: boolean;
-  /** The ledger rail, empty. It is here so the user has seen the column
-      before anything lands in it. */
-  sidebar?: ReactNode;
 };
 
 /**
@@ -20,13 +16,9 @@ type WelcomeScreenProps = {
  * product that opens with only a microphone button leaves the user guessing
  * what they are about to be asked, and they hesitate.
  */
-export function WelcomeScreen({
-  onStart,
-  busy = false,
-  sidebar = null,
-}: WelcomeScreenProps) {
+export function WelcomeScreen({ onStart, busy = false }: WelcomeScreenProps) {
   return (
-    <AppFrame sidebar={sidebar}>
+    <AppFrame>
       <div className={styles.body}>
         <Image
           src="/kubera-logo.png"

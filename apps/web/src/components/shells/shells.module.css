@@ -45,38 +45,20 @@
   color: var(--ink-faint);
 }
 
-/* --- call layout: conversation left, ledger right ------------------------ */
-
-.callSplit {
+.main {
   position: relative;
   z-index: 1;
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--rail-w);
-  grid-template-rows: minmax(0, 1fr);
-  min-height: 0;
-}
-
-.callMain {
-  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
 }
 
-.callCards {
-  position: relative;
-  z-index: 2;
-  min-height: 0;
-  min-width: 0;
-  border-left: 1px solid var(--border);
-  background: var(--surface);
-}
-
 .planScroll {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--surface);
@@ -282,9 +264,7 @@
 }
 
 .ctl:focus-visible,
-.ctlEnd:focus-visible,
-.paneTab:focus-visible,
-.paneTabOn:focus-visible {
+.ctlEnd:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -528,67 +508,7 @@
   }
 }
 
-/* --- phone: one pane at a time ------------------------------------------- */
-
-.paneTabs {
-  display: none;
-}
-
 @media (max-width: 44rem) {
-  .callSplit {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .callSplit[data-pane="voice"] .callCards,
-  .callSplit[data-pane="cards"] .callMain {
-    display: none;
-  }
-
-  .callCards {
-    border-left: none;
-  }
-
-  .paneTabs {
-    position: relative;
-    z-index: 3;
-    flex: none;
-    display: flex;
-    gap: 4px;
-    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-  }
-
-  .paneTab,
-  .paneTabOn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 10px;
-    border: none;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--ink-faint);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .paneTabOn {
-    background: var(--accent-tint);
-    color: var(--accent-soft);
-    font-weight: 600;
-  }
-
-  .paneDot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-  }
-
   .captionsStack {
     padding: 40px 20px 24px;
   }

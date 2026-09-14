@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 import { CallTimer } from "@/components/atoms";
 import { PlanView } from "@/components/plan/PlanView";
 import type { LevelMeter } from "@/lib/audio-level";
@@ -29,8 +29,6 @@ type CallShellProps = {
   thinking: boolean;
   transcript: Transcript;
   finance: FinanceSnapshot;
-  /** The ledger rail, owned by AppShell so it outlives the call. */
-  sidebar?: ReactNode;
   /** Kept for the call API; loudness bars left with the old hearing strip. */
   micMeter?: LevelMeter | null;
   connectionLabel?: string;
@@ -63,7 +61,6 @@ export function CallShell({
   thinking,
   transcript,
   finance,
-  sidebar = null,
   micMeter: _micMeter = null,
   connectionLabel = "Connected",
   notice = null,
@@ -97,9 +94,6 @@ export function CallShell({
 
   return (
     <AppFrame
-      // Once the plan is up it wants the full width; the rail has said
-      // everything it has to say and the calendar repeats it in context.
-      sidebar={planned ? null : sidebar}
       meta={
         <>
           <span

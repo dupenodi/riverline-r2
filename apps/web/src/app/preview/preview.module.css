@@ -45,15 +45,6 @@
   color: var(--ink-faint);
 }
 
-.stage {
-  max-width: 27rem;
-  margin: 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  overflow: hidden;
-}
-
 .blurb + .tab {
   margin-top: 12px;
 }
@@ -75,9 +66,10 @@
 }
 
 .planStage {
-  margin-top: 20px;
+  max-width: 42rem;
+  margin: 20px auto 0;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
-  overflow: hidden;
+  overflow: visible;
 }

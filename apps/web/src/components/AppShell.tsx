@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PipecatClient } from "@pipecat-ai/client-js";
 import { DailyTransport } from "@pipecat-ai/daily-transport";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
-import { LedgerRail } from "@/components/ledger/LedgerRail";
 import { CallShell } from "@/components/shells/CallShell";
 import { ConnectingShell } from "@/components/shells/ConnectingShell";
 import { EndedShell } from "@/components/shells/EndedShell";
@@ -469,33 +468,17 @@ export function AppShell() {
     });
   }, [micMeter]);
 
-  // One panel, rendered by whichever screen is up. It is deliberately not
-  // owned by the call screen: the column is there before the call starts, so
-  // the user has seen where their numbers are going to appear, and it is still
-  // there afterwards with the plan in it.
-  const sidebar = <LedgerRail snapshot={finance} />;
-
   if (phase === "idle") {
-    return <WelcomeScreen onStart={startCall} sidebar={sidebar} />;
+    return <WelcomeScreen onStart={startCall} />;
   }
 
   if (phase === "mic_blocked") {
-    return (
-      <MicBlockedShell
-        onRetry={startCall}
-        onBack={resetToIdle}
-        sidebar={sidebar}
-      />
-    );
+    return <MicBlockedShell onRetry={startCall} onBack={resetToIdle} />;
   }
 
   if (phase === "connecting") {
     return (
-      <ConnectingShell
-        step={connectStep}
-        onCancel={handleCancelConnect}
-        sidebar={sidebar}
-      />
+      <ConnectingShell step={connectStep} onCancel={handleCancelConnect} />
     );
   }
 
@@ -509,7 +492,6 @@ export function AppShell() {
         thinking={thinking}
         transcript={transcript}
         finance={finance}
-        sidebar={sidebar}
         micMeter={micMeter}
         connectionLabel={scaffoldMode ? "Scaffold" : "Connected"}
         notice={notice}
@@ -529,8 +511,6 @@ export function AppShell() {
         reason={phase === "error" ? "dropped" : endReason}
         onRestart={resetToIdle}
         error={error}
-        sidebar={sidebar}
-        sidebarVersion={finance.version}
       />
     );
   }

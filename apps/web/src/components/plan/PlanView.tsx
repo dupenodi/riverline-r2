@@ -9,10 +9,7 @@ import styles from "./plan.module.css";
  * the things to change.
  *
  * This only ever renders once the user has confirmed their details and Kubera
- * has actually built a plan. Until then the rail is the whole picture — the
- * assignment wants cards updating live, and it wants a plan at the end; those
- * are two different moments and conflating them is what made the old screen
- * feel like a dashboard of unfinished thoughts.
+ * has actually built a plan. Until then the call is just the conversation.
  *
  * Every sentence about money here is the planner's, read out rather than
  * recomposed. Nothing on this screen is computed in the browser.
